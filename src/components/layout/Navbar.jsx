@@ -13,7 +13,7 @@ const Navbar = ({ toggleSidebar }) => {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
-  const isLanding = location.pathname === '/';
+  const isLanding = location.pathname === '/' || location.pathname === '/landing';
 
   // Notification State
   const [notifications, setNotifications] = useState([]);
@@ -71,8 +71,10 @@ const Navbar = ({ toggleSidebar }) => {
   }, [user]);
 
   const handleLogout = () => {
-    logout();
-    navigate('/login', { replace: true });
+    navigate('/landing', { replace: true });
+    setTimeout(() => {
+        logout();
+    }, 50);
   };
 
   // 1. Floating Glassmorphic Navbar (Landing Page Only)
