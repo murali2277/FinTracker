@@ -10,6 +10,7 @@ import registerSvg from '../assets/register.svg';
 const Register = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const { register, loading } = useAuth();
   const navigate = useNavigate();
@@ -17,7 +18,7 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await register(name, email, password);
+      await register(name, email, phone, password);
       navigate('/dashboard');
       toast.success('Account created successfully!');
     } catch (e) {
@@ -71,6 +72,19 @@ const Register = () => {
                   placeholder="m@example.com" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium leading-none" htmlFor="phone">Phone Number</label>
+                <Input 
+                  id="phone" 
+                  type="tel" 
+                  placeholder="9876543210" 
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  pattern="[0-9]{10}"
+                  title="10 digit mobile number"
                   required
                 />
               </div>

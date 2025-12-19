@@ -15,12 +15,23 @@ const userSchema = new mongoose.Schema({
       'Please add a valid email'
     ]
   },
+  phone: {
+    type: String,
+    required: false, // Optional for legacy users, enforced in controller
+    unique: true,
+    sparse: true,    // Allow multiple users to have no phone
+    match: [/^\d{10}$/, 'Please add a valid 10-digit phone number']
+  },
   password: {
     type: String,
     required: [true, 'Please add a password'],
     minlength: 8,
     select: false // Don't return password by default
   },
+  friends: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }]
 }, {
   timestamps: true
 });

@@ -84,20 +84,23 @@ export const topUpWallet = async (req, res) => {
 // @route   POST /api/wallet/transfer
 // @access  Private
 export const transferFunds = async (req, res) => {
-    const { email, amount, description } = req.body;
+    const { phone, amount, description } = req.body;
 
     if (!amount || amount <= 0) {
         return res.status(400).json({ message: 'Invalid amount' });
     }
-    if (email === req.user.email) {
+    
+    // Check if sending to self
+    if (phone === req.user.phone) {
         return res.status(400).json({ message: 'Cannot transfer to self' });
     }
 
     try {
-        // 1. Find Recipient
-        const recipientUser = await User.findOne({ email });
+        // 1. Find Recipient (by Phone Only)
+        const recipientUser = await User.findOne({ phone });
+
         if (!recipientUser) {
-            return res.status(404).json({ message: 'Recipient not found' });
+            return res.status(404).json({ message: 'Recipient with this phone number not found' });
         }
 
         // 2. Find Sender Wallet and Check Balance (Atomic Check & Deduct)

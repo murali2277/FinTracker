@@ -2,7 +2,8 @@ import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { Button } from '../ui/Button';
-import { FiMoon, FiSun, FiMenu, FiLogOut, FiBell } from 'react-icons/fi';
+import { FiMoon, FiSun, FiMenu, FiLogOut, FiBell, FiUserPlus, FiCheck, FiX } from 'react-icons/fi';
+import { toast } from 'react-toastify';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import logo from '../../assets/FinTracker_logo.png';
 import axios from 'axios';
@@ -17,6 +18,7 @@ const Navbar = ({ toggleSidebar }) => {
 
   // Notification State
   const [notifications, setNotifications] = useState([]);
+  const [requests, setRequests] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifs, setShowNotifs] = useState(false);
   const notifRef = useRef(null);
@@ -35,12 +37,39 @@ const Navbar = ({ toggleSidebar }) => {
       if(!user) return;
       try {
           const config = { headers: { Authorization: `Bearer ${user.token}` } };
-          const { data } = await axios.get('/api/notifications', config);
-          setNotifications(data);
-          setUnreadCount(data.filter(n => !n.isRead).length);
+          const [notifRes, reqRes] = await Promise.all([
+              axios.get('/api/notifications', config),
+              axios.get('/api/friends/requests', config)
+          ]);
+          
+          setNotifications(notifRes.data);
+          setRequests(reqRes.data);
+          
+          const unreadNotifs = notifRes.data.filter(n => !n.isRead).length;
+          setUnreadCount(unreadNotifs + reqRes.data.length);
       } catch (error) {
           console.error("Failed to fetch notifications");
       }
+  };
+
+  const handleAcceptFriend = async (requestId) => {
+      try {
+          const config = { headers: { Authorization: `Bearer ${user.token}` } };
+          await axios.put(`/api/friends/accept/${requestId}`, {}, config);
+          toast.success("Friend accepted!");
+          setRequests(prev => prev.filter(r => r._id !== requestId));
+          setUnreadCount(prev => Math.max(0, prev - 1));
+      } catch (error) { toast.error("Failed to accept friend"); }
+  };
+
+  const handleRejectFriend = async (requestId) => {
+      try {
+          const config = { headers: { Authorization: `Bearer ${user.token}` } };
+          await axios.put(`/api/friends/reject/${requestId}`, {}, config);
+          toast.info("Friend request rejected");
+          setRequests(prev => prev.filter(r => r._id !== requestId));
+          setUnreadCount(prev => Math.max(0, prev - 1));
+      } catch (error) { toast.error("Failed to reject friend"); }
   };
 
   const markRead = async (id) => {
@@ -183,8 +212,55 @@ const Navbar = ({ toggleSidebar }) => {
                                   </button>
                               )}
                           </div>
-                          <div className="max-h-[300px] overflow-y-auto">
-                              {notifications.length === 0 ? (
+                          <div className="max-h-[400px] overflow-y-auto">
+                              {/* Friend Requests Section */}
+                              {requests.length > 0 && (
+                                  <div className="border-b border-border bg-indigo-50/30 dark:bg-indigo-900/10">
+                                      <div className="px-4 py-2 text-xs font-semibold text-indigo-600 dark:text-indigo-300 bg-indigo-100/50 dark:bg-indigo-900/40 flex items-center gap-1">
+                                          <FiUserPlus /> Friend Requests
+                                      </div>
+                                      {requests.map(req => (
+                                          <div key={req._id} className="p-3 border-b border-border last:border-0 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors">
+                                              <div className="flex items-center justify-between gap-3">
+                                                  <div className="flex items-center gap-3">
+                                                      <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-800 text-indigo-600 dark:text-indigo-200 flex items-center justify-center font-bold text-xs ring-2 ring-background">
+                                                         {req.sender.name.charAt(0).toUpperCase()}
+                                                      </div>
+                                                      <div>
+                                                          <p className="text-sm font-medium text-foreground">{req.sender.name}</p>
+                                                          <p className="text-xs text-muted-foreground">{req.sender.phone}</p>
+                                                      </div>
+                                                  </div>
+                                                  <div className="flex gap-1">
+                                                      <Button 
+                                                          size="xs" 
+                                                          variant="ghost"
+                                                          className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30" 
+                                                          onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              handleRejectFriend(req._id);
+                                                          }}
+                                                      >
+                                                          <FiX />
+                                                      </Button>
+                                                      <Button 
+                                                          size="xs" 
+                                                          className="h-7 bg-indigo-600 hover:bg-indigo-700 text-white border-0 shadow-sm" 
+                                                          onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              handleAcceptFriend(req._id);
+                                                          }}
+                                                      >
+                                                          Accept
+                                                      </Button>
+                                                  </div>
+                                              </div>
+                                          </div>
+                                      ))}
+                                  </div>
+                              )}
+
+                              {notifications.length === 0 && requests.length === 0 ? (
                                   <div className="p-8 text-center text-sm text-muted-foreground">
                                       No notifications
                                   </div>
@@ -192,16 +268,16 @@ const Navbar = ({ toggleSidebar }) => {
                                   notifications.map(notif => (
                                       <div 
                                           key={notif._id} 
-                                          className={`p-4 border-b last:border-0 hover:bg-muted/50 transition-colors cursor-pointer ${!notif.isRead ? 'bg-muted/20' : ''}`}
+                                          className={`p-4 border-b border-border last:border-0 hover:bg-muted/50 transition-colors cursor-pointer ${!notif.isRead ? 'bg-muted/30 dark:bg-muted/10' : ''}`}
                                           onClick={() => !notif.isRead && markRead(notif._id)}
                                       >
                                           <div className="flex gap-3">
                                               <div className={`mt-1 h-2 w-2 rounded-full flex-shrink-0 ${
-                                                  notif.type === 'success' ? 'bg-green-500' : 
-                                                  notif.type === 'warning' ? 'bg-amber-500' : 'bg-blue-500'
+                                                  notif.type === 'success' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 
+                                                  notif.type === 'warning' ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]'
                                               }`} />
                                               <div className="flex-1 space-y-1">
-                                                  <p className={`text-sm leading-snug ${!notif.isRead ? 'font-semibold' : ''}`}>
+                                                  <p className={`text-sm leading-snug ${!notif.isRead ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
                                                       {notif.message}
                                                   </p>
                                                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">

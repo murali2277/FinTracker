@@ -10,8 +10,8 @@ export const categorizeWithAI = async (userId, title, amount) => {
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-    // Use standard model for wider compatibility
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" }); 
+    // Use confirmed available model
+    const model = genAI.getGenerativeModel({ model: "gemini-pro-latest" }); 
 
     const history = await Transaction.find({
       user: userId,

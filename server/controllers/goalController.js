@@ -24,10 +24,9 @@ export const getGoalStrategy = async (req, res) => {
 
         const topExpenses = expenses.map(e => `${e._id} ($${e.total})`).join(', ');
 
-        // AI Generation
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        // Use gemini-pro as it is more widely supported currently
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+        // Use gemini-pro-latest as confirmed available
+        const model = genAI.getGenerativeModel({ model: "gemini-pro-latest" });
 
         const prompt = `
         You are a financial advisor. The user has a goal: "${goal.title}".
@@ -61,6 +60,9 @@ export const getGoalStrategy = async (req, res) => {
 
     } catch (error) {
         console.error("AI Strategy Failed:", error);
+        if (error.status === 429) {
+             return res.status(429).json({ message: " AI usage limit reached. Please try again in a minute." });
+        }
         res.status(500).json({ message: "Could not generate strategy" });
     }
 };

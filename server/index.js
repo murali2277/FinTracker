@@ -9,6 +9,7 @@ import goalRoutes from './routes/goalRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import walletRoutes from './routes/walletRoutes.js';
+import friendRoutes from './routes/friendRoutes.js';
 import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 
 dotenv.config();
@@ -43,6 +44,7 @@ app.use('/api/goals', goalRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/wallet', walletRoutes);
+app.use('/api/friends', friendRoutes);
 
 // Error Handling Middleware
 app.use(notFound);

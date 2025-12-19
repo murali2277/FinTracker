@@ -4,7 +4,7 @@ import { Button } from '../components/ui/Button';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
-import { FiCreditCard, FiSend, FiPlusCircle, FiActivity, FiArrowUpRight, FiArrowDownLeft, FiLock, FiEye, FiEyeOff } from 'react-icons/fi';
+import { FiCreditCard, FiSend, FiPlusCircle, FiActivity, FiArrowUpRight, FiArrowDownLeft, FiLock, FiEye, FiEyeOff, FiUserPlus, FiUsers, FiCheck, FiX } from 'react-icons/fi';
 import { Input } from '../components/ui/Input';
 
 const Wallet = () => {
@@ -16,29 +16,75 @@ const Wallet = () => {
 
     const [showTopUp, setShowTopUp] = useState(false);
     const [showTransfer, setShowTransfer] = useState(false);
+    const [showAddFriend, setShowAddFriend] = useState(false); // New Modal state
+    
+    // Friends State
+    const [friends, setFriends] = useState([]);
+    const [requests, setRequests] = useState([]);
+    const [newFriendPhone, setNewFriendPhone] = useState('');
+
     const [amount, setAmount] = useState('');
-    const [email, setEmail] = useState('');
+    const [phone, setPhone] = useState('');
     const [description, setDescription] = useState('');
     const [modalLoading, setModalLoading] = useState(false);
 
     useEffect(() => {
-        fetchWallet();
+        fetchData();
     }, [user]);
 
-    const fetchWallet = async () => {
+    const fetchData = async () => {
         try {
             const config = { headers: { Authorization: `Bearer ${user.token}` } };
-            const [wRes, hRes] = await Promise.all([
+            const [wRes, hRes, fRes, rRes] = await Promise.all([
                 axios.get('/api/wallet', config),
-                axios.get('/api/wallet/history', config)
+                axios.get('/api/wallet/history', config),
+                axios.get('/api/friends', config),
+                axios.get('/api/friends/requests', config)
             ]);
             setBalance(wRes.data.balance);
             setHistory(hRes.data);
+            setFriends(fRes.data);
+            setRequests(rRes.data);
             setLoading(false);
         } catch (error) {
             console.error(error);
             setLoading(false);
         }
+    };
+
+    const handleAddFriend = async (e) => {
+        e.preventDefault();
+        setModalLoading(true);
+        try {
+            const config = { headers: { Authorization: `Bearer ${user.token}` } };
+            await axios.post('/api/friends/request', { phone: newFriendPhone }, config);
+            toast.success("Friend request sent!");
+            setNewFriendPhone('');
+            setShowAddFriend(false);
+            fetchData();
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Failed to send request");
+        } finally {
+            setModalLoading(false);
+        }
+    };
+
+    const handleAcceptFriend = async (requestId) => {
+        try {
+            const config = { headers: { Authorization: `Bearer ${user.token}` } };
+            await axios.put(`/api/friends/accept/${requestId}`, {}, config);
+            toast.success("Friend accepted!");
+            fetchData();
+        } catch (error) {
+            toast.error("Failed to accept friend");
+        }
+    };
+
+    const initiateTransfer = (friendPhone) => {
+        setPhone(friendPhone);
+        setAmount('');
+        setDescription('');
+        setShowTransfer(true);
     };
 
     const handleTopUp = async (e) => {
@@ -50,7 +96,7 @@ const Wallet = () => {
             toast.success("Wallet topped up!");
             setAmount('');
             setShowTopUp(false);
-            fetchWallet();
+            fetchData();
         } catch (error) {
             toast.error(error.response?.data?.message || "Top up failed");
         } finally {
@@ -63,13 +109,13 @@ const Wallet = () => {
         setModalLoading(true);
         try {
             const config = { headers: { Authorization: `Bearer ${user.token}` } };
-            await axios.post('/api/wallet/transfer', { email, amount: Number(amount), description }, config);
+            await axios.post('/api/wallet/transfer', { phone, amount: Number(amount), description }, config);
             toast.success("Transfer successful!");
             setAmount('');
-            setEmail('');
+            setPhone('');
             setDescription('');
             setShowTransfer(false);
-            fetchWallet();
+            fetchData();
         } catch (error) {
             toast.error(error.response?.data?.message || "Transfer failed");
         } finally {
@@ -130,21 +176,43 @@ const Wallet = () => {
                     </div>
                 </div>
 
-                {/* Quick Info / Stats */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                     <Card className="flex flex-col justify-center items-center p-6 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100">
-                         <div className="p-3 bg-emerald-100 dark:bg-emerald-900 rounded-full mb-3 text-emerald-600">
-                             <FiArrowDownLeft className="text-2xl" />
-                         </div>
-                         <h3 className="font-semibold text-lg text-emerald-700">Income</h3>
-                         <p className="text-sm text-center text-muted-foreground mt-1">Receive funds instantly from friends</p>
-                     </Card>
-                     <Card className="flex flex-col justify-center items-center p-6 bg-rose-50 dark:bg-rose-950/30 border-rose-100">
-                         <div className="p-3 bg-rose-100 dark:bg-rose-900 rounded-full mb-3 text-rose-600">
-                             <FiArrowUpRight className="text-2xl" />
-                         </div>
-                         <h3 className="font-semibold text-lg text-rose-700">Transfer</h3>
-                         <p className="text-sm text-center text-muted-foreground mt-1">Secure payments to any user</p>
+                {/* Friends List */}
+                 <div className="grid grid-cols-1 gap-6">
+                     <Card>
+                         <CardHeader className="flex flex-row items-center justify-between">
+                             <CardTitle className="flex items-center gap-2">
+                                 <FiUsers /> Friends
+                             </CardTitle>
+                             <Button size="sm" variant="outline" onClick={() => setShowAddFriend(true)}>
+                                 <FiUserPlus className="mr-2" /> Add Friend
+                             </Button>
+                         </CardHeader>
+                         <CardContent>
+                             {friends.length === 0 ? (
+                                 <div className="text-center py-6 text-muted-foreground">
+                                     No friends yet. Add some to send money easily!
+                                 </div>
+                             ) : (
+                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                     {friends.map(friend => (
+                                         <div key={friend._id} className="flex items-center justify-between p-3 border hover:border-indigo-200 hover:shadow-sm rounded-lg transition-all bg-card/50">
+                                             <div className="flex items-center gap-3">
+                                                 <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg">
+                                                     {friend.name.charAt(0).toUpperCase()}
+                                                 </div>
+                                                 <div>
+                                                     <p className="font-medium">{friend.name}</p>
+                                                     <p className="text-xs text-muted-foreground">{friend.phone}</p>
+                                                 </div>
+                                             </div>
+                                             <Button size="sm" variant="secondary" className="hover:bg-indigo-100 hover:text-indigo-700" onClick={() => initiateTransfer(friend.phone)}>
+                                                 Pay
+                                             </Button>
+                                         </div>
+                                     ))}
+                                 </div>
+                             )}
+                         </CardContent>
                      </Card>
                 </div>
             </div>
@@ -237,13 +305,15 @@ const Wallet = () => {
                         <CardContent>
                             <form onSubmit={handleTransfer} className="space-y-4">
                                 <div>
-                                    <label className="text-sm font-medium">Recipient Email</label>
+                                    <label className="text-sm font-medium">Recipient Phone Number</label>
                                     <Input 
-                                        type="email" 
-                                        value={email} 
-                                        onChange={e => setEmail(e.target.value)} 
+                                        type="tel" 
+                                        value={phone} 
+                                        onChange={e => setPhone(e.target.value)} 
                                         required 
-                                        placeholder="friend@example.com"
+                                        placeholder="9876543210"
+                                        pattern="[0-9]{10}"
+                                        title="10 digit mobile number"
                                     />
                                 </div>
                                 <div>
@@ -272,6 +342,39 @@ const Wallet = () => {
                                 <div className="flex gap-2 justify-end pt-2">
                                     <Button type="button" variant="ghost" onClick={() => setShowTransfer(false)}>Cancel</Button>
                                     <Button type="submit" isLoading={modalLoading}>Send Money</Button>
+                                </div>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+            {/* Add Friend Modal */}
+            {showAddFriend && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <Card className="w-full max-w-sm animate-in zoom-in-95">
+                        <CardHeader>
+                            <CardTitle>Add Friend</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={handleAddFriend} className="space-y-4">
+                                <div>
+                                    <label className="text-sm font-medium">Friend's Phone Number</label>
+                                    <Input 
+                                        type="tel" 
+                                        value={newFriendPhone} 
+                                        onChange={e => setNewFriendPhone(e.target.value)} 
+                                        required 
+                                        placeholder="9876543210"
+                                        pattern="[0-9]{10}"
+                                        title="10 digit mobile number"
+                                    />
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        They will receive a request to accept.
+                                    </p>
+                                </div>
+                                <div className="flex gap-2 justify-end pt-2">
+                                    <Button type="button" variant="ghost" onClick={() => setShowAddFriend(false)}>Cancel</Button>
+                                    <Button type="submit" isLoading={modalLoading}>Send Request</Button>
                                 </div>
                             </form>
                         </CardContent>
