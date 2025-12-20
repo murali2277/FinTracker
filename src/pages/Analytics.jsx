@@ -221,7 +221,7 @@ const Analytics = () => {
                                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                 ))}
                             </Pie>
-                            <Tooltip formatter={(value) => `$${value}`} />
+                            <Tooltip formatter={(value) => `₹${value}`} />
                             <Legend />
                         </PieChart>
                         </ResponsiveContainer>
@@ -252,7 +252,7 @@ const Analytics = () => {
                                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                 ))}
                             </Pie>
-                            <Tooltip formatter={(value) => `$${value}`} />
+                            <Tooltip formatter={(value) => `₹${value}`} />
                             <Legend />
                         </PieChart>
                         </ResponsiveContainer>
@@ -324,7 +324,7 @@ const Analytics = () => {
                                 <YAxis fontSize={12} />
                                 <Tooltip 
                                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                                    formatter={(value) => `$${value}`}
+                                    formatter={(value) => `₹${value}`}
                                 />
                                 <Legend />
                                 {activeSeries.income && (

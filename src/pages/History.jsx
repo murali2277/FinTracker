@@ -185,7 +185,7 @@ const History = () => {
                                         t.type === 'income' ? 'text-emerald-600' : 
                                         t.type === 'expense' ? 'text-rose-600' : 'text-blue-600'
                                     }`}>
-                                        {t.type === 'income' ? '+' : '-'} ${Number(t.amount).toLocaleString()}
+                                        {t.type === 'income' ? '+' : '-'} ₹{Number(t.amount).toLocaleString()}
                                     </td>
                                     <td className="px-6 py-4 text-center">
                                         {(t.paymentMode === 'Wallet' || t.category === 'Wallet TopUp') ? (

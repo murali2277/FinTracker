@@ -36,6 +36,7 @@ const Wallet = () => {
     const [newPin, setNewPin] = useState('');
     const [confirmPin, setConfirmPin] = useState('');
     const [isEditingFriends, setIsEditingFriends] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
     const [pinError, setPinError] = useState('');
 
@@ -190,65 +191,116 @@ const Wallet = () => {
         <div className="space-y-6 animate-fade-in-up">
             <h1 className="text-2xl font-bold">Digital Wallet</h1>
 
-            {/* Wallet Card */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-700 p-8 text-white shadow-xl h-64 flex flex-col justify-between">
-                    <div className="absolute top-0 right-0 p-32 opacity-10 rounded-full bg-white blur-3xl transform translate-x-10 -translate-y-10"></div>
-                    
-                    <div className="flex justify-between items-start z-10">
-                        <div>
-                           <div className="flex items-center gap-2 mb-1">
-                               <p className="text-indigo-200 text-sm font-medium tracking-wider">CURRENT BALANCE</p>
-                               <button onClick={() => setShowBalance(!showBalance)} className="text-indigo-200 hover:text-white transition-colors">
-                                   {showBalance ? <FiEyeOff /> : <FiEye />}
-                               </button>
-                           </div>
-                           <h2 className="text-4xl font-bold">
-                               {loading ? '...' : showBalance ? `$${balance.toLocaleString()}` : '****'}
-                           </h2>
+            {/* Main Layout Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
+                
+                {/* Left Column: Wallet Logic + History */}
+                <div className="flex flex-col gap-6 h-full">
+                    {/* Wallet Card */}
+                    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-700 p-8 text-white shadow-xl h-64 flex flex-col justify-between">
+                        <div className="absolute top-0 right-0 p-32 opacity-10 rounded-full bg-white blur-3xl transform translate-x-10 -translate-y-10"></div>
+                        
+                        <div className="flex justify-between items-start z-10">
+                            <div>
+                               <div className="flex items-center gap-2 mb-1">
+                                   <p className="text-indigo-200 text-sm font-medium tracking-wider">CURRENT BALANCE</p>
+                                   <button onClick={() => setShowBalance(!showBalance)} className="text-indigo-200 hover:text-white transition-colors">
+                                       {showBalance ? <FiEyeOff /> : <FiEye />}
+                                   </button>
+                               </div>
+                               <h2 className="text-4xl font-bold">
+                                   {loading ? '...' : showBalance ? `₹${balance.toLocaleString()}` : '****'}
+                               </h2>
+                            </div>
+                            <FiCreditCard className="text-3xl opacity-80" />
                         </div>
-                        <FiCreditCard className="text-3xl opacity-80" />
+
+                        <div className="z-10 mt-8">
+                           <p className="font-mono text-lg tracking-widest opacity-80">
+                             **** **** **** {user._id.slice(-4).toUpperCase()}
+                           </p>
+                           <div className="flex justify-between items-end mt-4">
+                               <div>
+                                   <p className="text-[10px] text-indigo-300 uppercase">Card Holder</p>
+                                   <p className="font-medium text-sm">{user.name.toUpperCase()}</p>
+                               </div>
+                               <div className="flex gap-3">
+                                    <Button 
+                                        className="bg-white/20 hover:bg-white/30 text-white backdrop-blur border-none" 
+                                        size="sm"
+                                        onClick={() => {
+                                            setPin('');
+                                            setShowTopUp(true);
+                                        }}
+                                    >
+                                        <FiPlusCircle className="mr-2" /> Top Up
+                                    </Button>
+                                    <Button 
+                                        className="bg-white text-indigo-900 hover:bg-indigo-50 border-none" 
+                                        size="sm"
+                                        onClick={() => {
+                                            setPin('');
+                                            setShowTransfer(true);
+                                        }}
+                                    >
+                                        <FiSend className="mr-2" /> Send
+                                    </Button>
+                               </div>
+                           </div>
+                        </div>
                     </div>
 
-                    <div className="z-10 mt-8">
-                       <p className="font-mono text-lg tracking-widest opacity-80">
-                         **** **** **** {user._id.slice(-4).toUpperCase()}
-                       </p>
-                       <div className="flex justify-between items-end mt-4">
-                           <div>
-                               <p className="text-[10px] text-indigo-300 uppercase">Card Holder</p>
-                               <p className="font-medium text-sm">{user.name.toUpperCase()}</p>
-                           </div>
-                           <div className="flex gap-3">
-                                <Button 
-                                    className="bg-white/20 hover:bg-white/30 text-white backdrop-blur border-none" 
-                                    size="sm"
-                                    onClick={() => {
-                                        setPin('');
-                                        setShowTopUp(true);
-                                    }}
-                                >
-                                    <FiPlusCircle className="mr-2" /> Top Up
-                                </Button>
-                                <Button 
-                                    className="bg-white text-indigo-900 hover:bg-indigo-50 border-none" 
-                                    size="sm"
-                                    onClick={() => {
-                                        setPin('');
-                                        setShowTransfer(true);
-                                    }}
-                                >
-                                    <FiSend className="mr-2" /> Send
-                                </Button>
-                           </div>
-                       </div>
-                    </div>
+                    {/* Transaction History (Moved Here) */}
+                    <Card className="flex-1 flex flex-col min-h-0">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <FiActivity /> Wallet History
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex-1 overflow-y-auto">
+                            <div className="space-y-4">
+                                {history.length === 0 ? (
+                                    <p className="text-center text-muted-foreground py-8">No wallet transactions yet.</p>
+                                ) : (
+                                    history.map(tx => (
+                                        <div key={tx._id} className="flex items-center justify-between p-3 border-b last:border-0 hover:bg-muted/50 rounded-lg transition-colors">
+                                            <div className="flex items-center gap-4">
+                                                <div className={`p-2 rounded-full ${
+                                                    tx.type === 'TOPUP' ? 'bg-green-100 text-green-600' : 
+                                                    tx.type === 'RECEIVED' ? 'bg-blue-100 text-blue-600' :
+                                                    'bg-orange-100 text-orange-600' // SENT
+                                                }`}>
+                                                    {tx.type === 'TOPUP' ? <FiPlusCircle /> : 
+                                                     tx.type === 'RECEIVED' ? <FiArrowDownLeft /> : <FiArrowUpRight />}
+                                                </div>
+                                                <div>
+                                                    <p className="font-medium text-sm">
+                                                        {tx.type === 'TOPUP' ? 'Wallet Top Up' : 
+                                                         tx.type === 'TRANSFER' ? `Sent to ${tx.relatedUser?.name || 'Unknown'}` :
+                                                         `Received from ${tx.relatedUser?.name || 'Unknown'}`
+                                                        }
+                                                    </p>
+                                                    <p className="text-xs text-muted-foreground">{new Date(tx.createdAt).toLocaleString()}</p>
+                                                </div>
+                                            </div>
+                                            <div className={`font-bold ${
+                                                tx.type === 'TOPUP' || tx.type === 'RECEIVED' ? 'text-green-600' : 'text-red-600'
+                                            }`}>
+                                                {/* Ensure currency symbol is Correct */}
+                                                {tx.type === 'TOPUP' || tx.type === 'RECEIVED' ? '+' : '-'}₹{Math.abs(tx.amount).toFixed(2)}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
 
-                {/* Friends List */}
-                 <div className="grid grid-cols-1 gap-6">
-                     <Card>
-                         <CardHeader className="flex flex-row items-center justify-between">
+                {/* Right Column: Friends List (Full Height) */}
+                <div className="h-full">
+                     <Card className="h-full flex flex-col">
+                         <CardHeader className="flex flex-row items-center justify-between shrink-0">
                              <CardTitle className="flex items-center gap-2">
                                  <FiUsers /> Friends
                              </CardTitle>
@@ -263,14 +315,23 @@ const Wallet = () => {
                                 </Button>
                              </div>
                          </CardHeader>
-                         <CardContent>
+                         <CardContent className="flex-1 overflow-y-auto min-h-[400px]">
+                             {friends.length > 0 && (
+                                 <div className="mb-4">
+                                     <Input
+                                         placeholder="Search friends by name or phone..."
+                                         value={searchQuery}
+                                         onChange={(e) => setSearchQuery(e.target.value)}
+                                     />
+                                 </div>
+                             )}
                              {friends.length === 0 ? (
                                  <div className="text-center py-6 text-muted-foreground">
                                      No friends yet. Add some to send money easily!
                                  </div>
                              ) : (
                                  <div className="grid grid-cols-1 gap-4">
-                                     {friends.map(friend => (
+                                     {friends.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()) || f.phone.includes(searchQuery)).map(friend => (
                                          <div key={friend._id} className="flex items-center justify-between p-3 border hover:border-indigo-200 hover:shadow-sm rounded-lg transition-all bg-card/50 gap-3">
                                             <div className="flex items-center gap-3 min-w-0">
                                                 <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg shrink-0">
@@ -298,51 +359,6 @@ const Wallet = () => {
                      </Card>
                 </div>
             </div>
-
-            {/* Transaction History */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <FiActivity /> Wallet History
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="space-y-4">
-                        {history.length === 0 ? (
-                            <p className="text-center text-muted-foreground py-8">No wallet transactions yet.</p>
-                        ) : (
-                            history.map(tx => (
-                                <div key={tx._id} className="flex items-center justify-between p-3 border-b last:border-0 hover:bg-muted/50 rounded-lg transition-colors">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`p-2 rounded-full ${
-                                            tx.type === 'TOPUP' ? 'bg-green-100 text-green-600' : 
-                                            tx.type === 'RECEIVED' ? 'bg-blue-100 text-blue-600' :
-                                            'bg-orange-100 text-orange-600' // SENT
-                                        }`}>
-                                            {tx.type === 'TOPUP' ? <FiPlusCircle /> : 
-                                             tx.type === 'RECEIVED' ? <FiArrowDownLeft /> : <FiArrowUpRight />}
-                                        </div>
-                                        <div>
-                                            <p className="font-medium text-sm">
-                                                {tx.type === 'TOPUP' ? 'Wallet Top Up' : 
-                                                 tx.type === 'TRANSFER' ? `Sent to ${tx.relatedUser?.name || 'Unknown'}` :
-                                                 `Received from ${tx.relatedUser?.name || 'Unknown'}`
-                                                }
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">{new Date(tx.createdAt).toLocaleString()}</p>
-                                        </div>
-                                    </div>
-                                    <div className={`font-bold ${
-                                        tx.type === 'TOPUP' || tx.type === 'RECEIVED' ? 'text-green-600' : 'text-red-600'
-                                    }`}>
-                                        {tx.type === 'TOPUP' || tx.type === 'RECEIVED' ? '+' : '-'}${Math.abs(tx.amount).toFixed(2)}
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
 
             {/* Modals */}
             {/* Set PIN Modal (Forced if !hasPin) */}
@@ -417,7 +433,7 @@ const Wallet = () => {
                         <CardContent>
                             <form onSubmit={handleTopUp} className="space-y-4">
                                 <div>
-                                    <label className="text-sm font-medium">Amount ($)</label>
+                                    <label className="text-sm font-medium">Amount (₹)</label>
                                     <Input 
                                         type="number" 
                                         min="1" 
@@ -473,7 +489,7 @@ const Wallet = () => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-sm font-medium">Amount ($)</label>
+                                    <label className="text-sm font-medium">Amount (₹)</label>
                                     <Input 
                                         type="number" 
                                         min="1" 

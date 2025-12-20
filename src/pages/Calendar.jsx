@@ -303,7 +303,7 @@ const Calendar = () => {
                                                       </button>
                                                   )}
                                                   <span className="font-semibold text-foreground">
-                                                      {r.amount ? `$${Number(r.amount).toLocaleString()}` : '-'}
+                                                      {r.amount ? `₹${Number(r.amount).toLocaleString()}` : '-'}
                                                   </span>
                                               </div>
                                           </div>

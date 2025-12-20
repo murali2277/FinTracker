@@ -124,7 +124,7 @@ const Goals = () => {
                       <FiTrendingUp className="h-4 w-4 text-emerald-500" />
                   </CardHeader>
                   <CardContent>
-                      <div className="text-2xl font-bold">${analysis.avgMonthlySavings}</div>
+                      <div className="text-2xl font-bold">₹{analysis.avgMonthlySavings}</div>
                       <p className="text-xs text-muted-foreground mt-1">Based on last 3 months</p>
                   </CardContent>
               </Card>
@@ -139,7 +139,7 @@ const Goals = () => {
                           <>
                             <div className="text-2xl font-bold">{analysis.topExpenses[0].category}</div>
                             <p className="text-xs text-muted-foreground mt-1">
-                                Avg ${Math.round(analysis.topExpenses[0].monthlyAvg)}/mo
+                                Avg ₹{Math.round(analysis.topExpenses[0].monthlyAvg)}/mo
                             </p>
                           </>
                       ) : (
@@ -157,7 +157,7 @@ const Goals = () => {
                       <div className="text-sm text-muted-foreground">
                           {Number(analysis.avgMonthlySavings) > 0 ? (
                                <span>
-                                   Allocating your average savings of <span className="font-bold text-foreground">${analysis.avgMonthlySavings}</span> fully to your goals could accelerate completion by months.
+                                   Allocating your average savings of <span className="font-bold text-foreground">₹{analysis.avgMonthlySavings}</span> fully to your goals could accelerate completion by months.
                                </span>
                           ) : (
                               <span>Start saving to see acceleration strategies here.</span>
@@ -206,7 +206,7 @@ const Goals = () => {
                              </Button>
                         </div>
                         <div className="flex justify-between text-sm text-muted-foreground mt-1">
-                            <span>${goal.currentAmount.toLocaleString()} saved</span>
+                            <span>₹{goal.currentAmount.toLocaleString()} saved</span>
                             <span className="font-semibold text-foreground">{percentage.toFixed(0)}%</span>
                         </div>
                     </CardHeader>
@@ -219,8 +219,8 @@ const Goals = () => {
                             ></div>
                         </div>
                         <div className="flex justify-between text-xs text-muted-foreground mb-4">
-                             <span>Target: ${goal.targetAmount.toLocaleString()}</span>
-                             <span>Remaining: ${remaining.toLocaleString()}</span>
+                             <span>Target: ₹{goal.targetAmount.toLocaleString()}</span>
+                             <span>Remaining: ₹{remaining.toLocaleString()}</span>
                         </div>
 
                         {/* Insights */}
@@ -247,7 +247,7 @@ const Goals = () => {
                              {projection?.requiredMonthly > 0 && daysLeft > 0 && (
                                  <div className="flex justify-between text-orange-600 dark:text-orange-400">
                                      <span>Required/Mo:</span>
-                                     <span className="font-bold">${projection.requiredMonthly}</span>
+                                     <span className="font-bold">₹{projection.requiredMonthly}</span>
                                  </div>
                              )}
                         </div>
@@ -260,7 +260,7 @@ const Goals = () => {
                                 className="flex-1 text-xs border-dashed"
                                 onClick={() => handleUpdateAmount(goal._id, goal.currentAmount, 100)}
                             >
-                                + $100
+                                + ₹100
                             </Button>
                             <Button 
                                 variant="outline" 
