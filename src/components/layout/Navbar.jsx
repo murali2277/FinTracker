@@ -59,7 +59,9 @@ const Navbar = ({ toggleSidebar }) => {
           toast.success("Friend accepted!");
           setRequests(prev => prev.filter(r => r._id !== requestId));
           setUnreadCount(prev => Math.max(0, prev - 1));
-      } catch (error) { toast.error("Failed to accept friend"); }
+      } catch (error) { 
+          toast.error(error.response?.data?.message || "Failed to accept friend"); 
+      }
   };
 
   const handleRejectFriend = async (requestId) => {
@@ -69,7 +71,9 @@ const Navbar = ({ toggleSidebar }) => {
           toast.info("Friend request rejected");
           setRequests(prev => prev.filter(r => r._id !== requestId));
           setUnreadCount(prev => Math.max(0, prev - 1));
-      } catch (error) { toast.error("Failed to reject friend"); }
+      } catch (error) { 
+          toast.error(error.response?.data?.message || "Failed to reject friend"); 
+      }
   };
 
   const markRead = async (id) => {

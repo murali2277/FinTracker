@@ -22,6 +22,9 @@ const walletSchema = mongoose.Schema({
   isLocked: {
       type: Boolean,
       default: false
+  },
+  pin: {
+      type: String // Hashed PIN
   }
 }, {
   timestamps: true

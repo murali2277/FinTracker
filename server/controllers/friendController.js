@@ -42,20 +42,28 @@ const sendFriendRequest = asyncHandler(async (req, res) => {
 
     if (existingRequest) {
         if (existingRequest.status === 'accepted') {
-            res.status(400);
-            throw new Error('You are already friends');
+            // Self-healing: If request is accepted but users aren't linked (passed line 30 check), fix it.
+            // We know 'sender' (me) doesn't have 'receiver' in friends list.
+            sender.friends.push(receiver._id);
+            await sender.save();
+
+            // Check receiver side too
+            if (!receiver.friends.includes(sender._id)) {
+                receiver.friends.push(sender._id);
+                await receiver.save();
+            }
+
+            return res.status(200).json({ message: 'Friend added (restored)' });
         } else if (existingRequest.status === 'pending') {
             res.status(400);
-            throw new Error('Friend request already pending');
+            if (existingRequest.sender.toString() === req.user._id.toString()) {
+                throw new Error('Friend request already sent');
+            } else {
+                throw new Error('This user has already sent you a request. Check your notifications.');
+            }
         } else {
             // Should theoretically be 'rejected' or logic flaw.
             // If rejected, allow re-sending by resetting this request.
-            // But since index is unique on (sender, receiver), we must reuse this document or delete it.
-            // NOTE: The unique index is on {sender: 1, receiver: 1}.
-            // If the existing one was {sender: B, receiver: A}, and we are A sending to B,
-            // the index won't block it initially, BUT logic should prevent double links.
-            // Actually, if I want strict uniqueness direction-agnostic, I need more complex index.
-            // But assume standard flow:
             
             // If we found a request where current user matches sender:
             if(existingRequest.sender.toString() === req.user._id.toString()){
@@ -64,19 +72,11 @@ const sendFriendRequest = asyncHandler(async (req, res) => {
                res.status(200).json({ message: 'Friend request sent again' });
                return;
             } else {
-               // The other person rejected YOU, or generic state.
-               // Let's just delete the old one and create new for clean state
-               // Only if we can match the unique index key. 
-               // If existing is A->B and we want A->B, we can update.
-               // If existing is B->A and we want A->B, that's fine by index (sender,receiver) unless we enforce bidirectional uniqueness manually.
-               
-               // To avoid duplicate key error specifically:
-               // The error `dup key: { sender: A, receiver: B }` means there is already a doc with A, B.
-               // So we must be A sending to B.
-               
+               // The other person rejected YOU.
+               // Update existing to be pending again, but SWAP sender/receiver to make it "new" from this user
                existingRequest.status = 'pending';
                existingRequest.sender = req.user._id; 
-               existingRequest.receiver = receiver._id; // Ensure direction
+               existingRequest.receiver = receiver._id;
                await existingRequest.save();
                res.status(200).json({ message: 'Friend request sent' });
                return;
@@ -120,23 +120,35 @@ const acceptFriendRequest = asyncHandler(async (req, res) => {
         throw new Error('Not authorized');
     }
 
-    if (request.status !== 'pending') {
+    if (request.status === 'rejected') {
         res.status(400);
-        throw new Error('Request already processed');
+        throw new Error('Request has been rejected');
     }
 
-    request.status = 'accepted';
-    await request.save();
+    // Idempotency: If pending, mark accepted. If accepted, just ensure linking.
+    if (request.status === 'pending') {
+        request.status = 'accepted';
+        await request.save();
+    }
 
-    // Add to friends lists
+    // Add to friends lists safely
     const sender = await User.findById(request.sender);
     const receiver = await User.findById(request.receiver);
 
-    sender.friends.push(receiver._id);
-    receiver.friends.push(sender._id);
+    if (!sender || !receiver) {
+        res.status(404);
+        throw new Error('One of the users involved in this request no longer exists');
+    }
 
-    await sender.save();
-    await receiver.save();
+    if (!sender.friends.includes(receiver._id)) {
+        sender.friends.push(receiver._id);
+        await sender.save();
+    }
+    
+    if (!receiver.friends.includes(sender._id)) {
+        receiver.friends.push(sender._id);
+        await receiver.save();
+    }
 
     res.json({ message: 'Friend request accepted' });
 });
@@ -176,4 +188,37 @@ const rejectFriendRequest = asyncHandler(async (req, res) => {
     res.json({ message: 'Friend request rejected' });
 });
 
-export { sendFriendRequest, getFriendRequests, acceptFriendRequest, rejectFriendRequest, getFriends };
+// @desc    Remove a friend
+// @route   DELETE /api/friends/:id
+// @access  Private
+const removeFriend = asyncHandler(async (req, res) => {
+    const friendId = req.params.id;
+    const userId = req.user._id;
+
+    const user = await User.findById(userId);
+    const friend = await User.findById(friendId);
+
+    if (!friend) {
+        res.status(404);
+        throw new Error('User not found');
+    }
+
+    // Remove from friends arrays
+    user.friends = user.friends.filter(id => id.toString() !== friendId.toString());
+    friend.friends = friend.friends.filter(id => id.toString() !== userId.toString());
+
+    await user.save();
+    await friend.save();
+
+    // Clean up Friend Request (so they can re-add each other)
+    await FriendRequest.findOneAndDelete({
+        $or: [
+            { sender: userId, receiver: friendId },
+            { sender: friendId, receiver: userId }
+        ]
+    });
+
+    res.json({ message: 'Friend removed' });
+});
+
+export { sendFriendRequest, getFriendRequests, acceptFriendRequest, rejectFriendRequest, getFriends, removeFriend };

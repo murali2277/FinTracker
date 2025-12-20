@@ -28,6 +28,17 @@ const Wallet = () => {
     const [description, setDescription] = useState('');
     const [modalLoading, setModalLoading] = useState(false);
 
+    const [hasPin, setHasPin] = useState(true); // Assume true initially to avoid flicker
+    const [showSetPin, setShowSetPin] = useState(false);
+    
+    // Form States
+    const [pin, setPin] = useState('');
+    const [newPin, setNewPin] = useState('');
+    const [confirmPin, setConfirmPin] = useState('');
+    const [isEditingFriends, setIsEditingFriends] = useState(false);
+
+    const [pinError, setPinError] = useState('');
+
     useEffect(() => {
         fetchData();
     }, [user]);
@@ -42,6 +53,10 @@ const Wallet = () => {
                 axios.get('/api/friends/requests', config)
             ]);
             setBalance(wRes.data.balance);
+            setHasPin(wRes.data.hasPin);
+            if (!wRes.data.hasPin) {
+                setShowSetPin(true);
+            }
             setHistory(hRes.data);
             setFriends(fRes.data);
             setRequests(rRes.data);
@@ -49,6 +64,39 @@ const Wallet = () => {
         } catch (error) {
             console.error(error);
             setLoading(false);
+        }
+    };
+
+    const handleSetPin = async (e) => {
+        e.preventDefault();
+        setPinError('');
+        
+        if (newPin !== confirmPin) {
+            setPinError("PINs do not match");
+            return;
+        }
+        if (!/^\d{4,6}$/.test(newPin)) {
+            setPinError("PIN must be 4-6 numeric digits");
+            return;
+        }
+        
+        setModalLoading(true);
+        try {
+            const config = { headers: { Authorization: `Bearer ${user.token}` } };
+            await axios.post('/api/wallet/pin', { pin: newPin }, config);
+            toast.success("Wallet PIN set successfully!");
+            setHasPin(true);
+            setShowSetPin(false);
+        } catch (error) {
+            // For backend validation errors handled by inline, fallback to toast only if generic
+            const msg = error.response?.data?.message;
+            if (msg === 'PIN must be 4-6 digits' || msg === 'PINs do not match') {
+                 setPinError(msg);
+            } else {
+                 toast.error(msg || "Failed to set PIN");
+            }
+        } finally {
+            setModalLoading(false);
         }
     };
 
@@ -80,10 +128,23 @@ const Wallet = () => {
         }
     };
 
+    const handleRemoveFriend = async (friendId) => {
+        if (!window.confirm("Are you sure you want to remove this friend?")) return;
+        try {
+            const config = { headers: { Authorization: `Bearer ${user.token}` } };
+            await axios.delete(`/api/friends/${friendId}`, config);
+            toast.success("Friend removed");
+            fetchData();
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Failed to remove friend");
+        }
+    };
+
     const initiateTransfer = (friendPhone) => {
         setPhone(friendPhone);
         setAmount('');
         setDescription('');
+        setPin(''); // Reset PIN for new transaction
         setShowTransfer(true);
     };
 
@@ -92,9 +153,10 @@ const Wallet = () => {
         setModalLoading(true);
         try {
             const config = { headers: { Authorization: `Bearer ${user.token}` } };
-            await axios.post('/api/wallet/topup', { amount: Number(amount) }, config);
+            await axios.post('/api/wallet/topup', { amount: Number(amount), pin }, config);
             toast.success("Wallet topped up!");
             setAmount('');
+            setPin('');
             setShowTopUp(false);
             fetchData();
         } catch (error) {
@@ -109,11 +171,12 @@ const Wallet = () => {
         setModalLoading(true);
         try {
             const config = { headers: { Authorization: `Bearer ${user.token}` } };
-            await axios.post('/api/wallet/transfer', { phone, amount: Number(amount), description }, config);
+            await axios.post('/api/wallet/transfer', { phone, amount: Number(amount), description, pin }, config);
             toast.success("Transfer successful!");
             setAmount('');
             setPhone('');
             setDescription('');
+            setPin('');
             setShowTransfer(false);
             fetchData();
         } catch (error) {
@@ -160,14 +223,20 @@ const Wallet = () => {
                                 <Button 
                                     className="bg-white/20 hover:bg-white/30 text-white backdrop-blur border-none" 
                                     size="sm"
-                                    onClick={() => setShowTopUp(true)}
+                                    onClick={() => {
+                                        setPin('');
+                                        setShowTopUp(true);
+                                    }}
                                 >
                                     <FiPlusCircle className="mr-2" /> Top Up
                                 </Button>
                                 <Button 
                                     className="bg-white text-indigo-900 hover:bg-indigo-50 border-none" 
                                     size="sm"
-                                    onClick={() => setShowTransfer(true)}
+                                    onClick={() => {
+                                        setPin('');
+                                        setShowTransfer(true);
+                                    }}
                                 >
                                     <FiSend className="mr-2" /> Send
                                 </Button>
@@ -183,9 +252,16 @@ const Wallet = () => {
                              <CardTitle className="flex items-center gap-2">
                                  <FiUsers /> Friends
                              </CardTitle>
-                             <Button size="sm" variant="outline" onClick={() => setShowAddFriend(true)}>
-                                 <FiUserPlus className="mr-2" /> Add Friend
-                             </Button>
+                             <div className="flex gap-2">
+                                {friends.length > 0 && (
+                                    <Button size="sm" variant={isEditingFriends ? "secondary" : "ghost"} onClick={() => setIsEditingFriends(!isEditingFriends)}>
+                                        {isEditingFriends ? "Done" : "Edit"}
+                                    </Button>
+                                )}
+                                <Button size="sm" variant="outline" onClick={() => setShowAddFriend(true)}>
+                                    <FiUserPlus className="mr-2" /> Add Friend
+                                </Button>
+                             </div>
                          </CardHeader>
                          <CardContent>
                              {friends.length === 0 ? (
@@ -193,22 +269,28 @@ const Wallet = () => {
                                      No friends yet. Add some to send money easily!
                                  </div>
                              ) : (
-                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                 <div className="grid grid-cols-1 gap-4">
                                      {friends.map(friend => (
-                                         <div key={friend._id} className="flex items-center justify-between p-3 border hover:border-indigo-200 hover:shadow-sm rounded-lg transition-all bg-card/50">
-                                             <div className="flex items-center gap-3">
-                                                 <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg">
-                                                     {friend.name.charAt(0).toUpperCase()}
-                                                 </div>
-                                                 <div>
-                                                     <p className="font-medium">{friend.name}</p>
-                                                     <p className="text-xs text-muted-foreground">{friend.phone}</p>
-                                                 </div>
-                                             </div>
-                                             <Button size="sm" variant="secondary" className="hover:bg-indigo-100 hover:text-indigo-700" onClick={() => initiateTransfer(friend.phone)}>
-                                                 Pay
-                                             </Button>
-                                         </div>
+                                         <div key={friend._id} className="flex items-center justify-between p-3 border hover:border-indigo-200 hover:shadow-sm rounded-lg transition-all bg-card/50 gap-3">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg shrink-0">
+                                                    {friend.name.charAt(0).toUpperCase()}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="font-medium truncate">{friend.name}</p>
+                                                    <p className="text-xs text-muted-foreground truncate">{friend.phone}</p>
+                                                </div>
+                                            </div>
+                                            {isEditingFriends ? (
+                                                <Button size="sm" variant="destructive" className="shrink-0" onClick={() => handleRemoveFriend(friend._id)}>
+                                                    Remove
+                                                </Button>
+                                            ) : (
+                                                <Button size="sm" variant="secondary" className="hover:bg-indigo-100 hover:text-indigo-700 shrink-0" onClick={() => initiateTransfer(friend.phone)}>
+                                                    Pay
+                                                </Button>
+                                            )}
+                                        </div>
                                      ))}
                                  </div>
                              )}
@@ -263,6 +345,68 @@ const Wallet = () => {
             </Card>
 
             {/* Modals */}
+            {/* Set PIN Modal (Forced if !hasPin) */}
+            {showSetPin && (
+                 <div className="fixed top-0 left-0 right-0 bottom-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 h-screen w-screen">
+                     <Card className="w-full max-w-sm border-indigo-200 shadow-2xl animate-in zoom-in-95">
+                         <CardHeader>
+                             <CardTitle className="text-center text-indigo-700 flex flex-col items-center gap-2">
+                                 <FiLock className="text-3xl" />
+                                 Set Wallet PIN
+                             </CardTitle>
+                             <p className="text-center text-sm text-muted-foreground">
+                                 Create a secure 4-6 digit PIN for transactions.
+                             </p>
+                         </CardHeader>
+                         <CardContent>
+                             <form onSubmit={handleSetPin} className="space-y-4">
+                                 <Input 
+                                     type="password"
+                                     placeholder="Enter PIN (4-6 digits)" 
+                                     value={newPin} 
+                                     onChange={(e) => {
+                                         const val = e.target.value;
+                                         if (/^\d*$/.test(val)) {
+                                             setNewPin(val);
+                                             setPinError('');
+                                         }
+                                     }} 
+                                     maxLength={6}
+                                     className="text-center text-2xl tracking-widest"
+                                     autoFocus
+                                     inputMode="numeric"
+                                     pattern="[0-9]*"
+                                 />
+                                 <Input 
+                                     type="password"
+                                     placeholder="Confirm PIN" 
+                                     value={confirmPin} 
+                                     onChange={(e) => {
+                                          const val = e.target.value;
+                                          if (/^\d*$/.test(val)) {
+                                             setConfirmPin(val);
+                                             setPinError('');
+                                          }
+                                     }} 
+                                     maxLength={6}
+                                     className="text-center text-2xl tracking-widest"
+                                     inputMode="numeric"
+                                     pattern="[0-9]*"
+                                 />
+                                 {pinError && (
+                                     <p className="text-sm text-red-500 font-medium text-center animate-shake">
+                                         {pinError}
+                                     </p>
+                                 )}
+                                 <Button className="w-full" size="lg" isLoading={modalLoading} disabled={newPin.length < 4}>
+                                     Set Secure PIN
+                                 </Button>
+                             </form>
+                         </CardContent>
+                     </Card>
+                 </div>
+            )}
+
             {/* Top Up Modal */}
             {showTopUp && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -281,6 +425,18 @@ const Wallet = () => {
                                         onChange={e => setAmount(e.target.value)} 
                                         required 
                                         placeholder="100.00"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-sm font-medium">Wallet PIN</label>
+                                    <Input 
+                                        type="password" 
+                                        value={pin} 
+                                        onChange={e => setPin(e.target.value)} 
+                                        required 
+                                        placeholder="Enter PIN"
+                                        maxLength={6}
+                                        className="tracking-widest"
                                     />
                                 </div>
                                 <div className="flex gap-2 justify-end pt-2">
@@ -334,6 +490,18 @@ const Wallet = () => {
                                         value={description} 
                                         onChange={e => setDescription(e.target.value)} 
                                         placeholder="e.g. Dinner, Rent"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-sm font-medium">Wallet PIN</label>
+                                    <Input 
+                                        type="password" 
+                                        value={pin} 
+                                        onChange={e => setPin(e.target.value)} 
+                                        required 
+                                        placeholder="Enter PIN"
+                                        maxLength={6}
+                                        className="tracking-widest"
                                     />
                                 </div>
                                 <div className="p-2 bg-amber-50 border border-amber-100 rounded text-xs text-amber-800">

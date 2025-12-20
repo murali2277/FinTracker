@@ -4,6 +4,7 @@ import Transaction from '../models/Transaction.js';
 import User from '../models/User.js';
 import mongoose from 'mongoose'; 
 import { categorizeWithAI } from '../utils/aiCategorizer.js'; 
+import bcrypt from 'bcryptjs';
 
 // @desc    Get user wallet balance
 // @route   GET /api/wallet
@@ -15,7 +16,13 @@ export const getWallet = async (req, res) => {
             // Auto-create if not exists
             wallet = await Wallet.create({ user: req.user._id });
         }
-        res.json(wallet);
+        
+        // Return wallet info plus pin status (without the actual pin)
+        // Mongoose methods return a document, use .toObject() or extract props
+        const walletData = wallet.toObject();
+        delete walletData.pin; // Ensure hash is not sent
+        
+        res.json({ ...walletData, hasPin: !!wallet.pin });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -35,22 +42,61 @@ export const getWalletHistory = async (req, res) => {
     }
 };
 
+// @desc    Set Wallet PIN
+// @route   POST /api/wallet/pin
+// @access  Private
+export const setWalletPin = async (req, res) => {
+    const { pin } = req.body;
+    
+    if (!pin || !/^\d{4,6}$/.test(pin)) {
+        return res.status(400).json({ message: 'PIN must be 4-6 digits' });
+    }
+
+    try {
+        const wallet = await Wallet.findOne({ user: req.user._id });
+        if (!wallet) {
+            return res.status(404).json({ message: 'Wallet not found' });
+        }
+
+        if (wallet.pin) {
+            return res.status(400).json({ message: 'PIN already set' });
+        }
+
+        // Hash PIN
+        const salt = await bcrypt.genSalt(10);
+        wallet.pin = await bcrypt.hash(pin, salt);
+        await wallet.save();
+
+        res.json({ message: 'Wallet PIN set successfully' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 // @desc    Top up wallet (Add Money)
 // @route   POST /api/wallet/topup
 // @access  Private
 export const topUpWallet = async (req, res) => {
-    const { amount } = req.body;
+    const { amount, pin } = req.body;
     if (!amount || amount <= 0) {
         return res.status(400).json({ message: 'Invalid amount' });
     }
+    if (!pin) {
+        return res.status(400).json({ message: 'PIN required' });
+    }
 
     try {
-        // Atomic update
-        const wallet = await Wallet.findOneAndUpdate(
-            { user: req.user._id },
-            { $inc: { balance: amount } },
-            { new: true, upsert: true }
-        );
+        // Verify PIN first
+        const wallet = await Wallet.findOne({ user: req.user._id });
+        if (!wallet) return res.status(404).json({ message: 'Wallet not found' });
+        
+        if (!wallet.pin || !(await bcrypt.compare(pin, wallet.pin))) {
+            return res.status(401).json({ message: 'Invalid PIN' });
+        }
+
+        // Proceed to update balance
+        wallet.balance += Number(amount);
+        await wallet.save();
 
         // Record Transaction
         await WalletTransaction.create({
@@ -84,10 +130,13 @@ export const topUpWallet = async (req, res) => {
 // @route   POST /api/wallet/transfer
 // @access  Private
 export const transferFunds = async (req, res) => {
-    const { phone, amount, description } = req.body;
+    const { phone, amount, description, pin } = req.body;
 
     if (!amount || amount <= 0) {
         return res.status(400).json({ message: 'Invalid amount' });
+    }
+    if (!pin) {
+        return res.status(400).json({ message: 'PIN required' });
     }
     
     // Check if sending to self
@@ -96,32 +145,37 @@ export const transferFunds = async (req, res) => {
     }
 
     try {
-        // 1. Find Recipient (by Phone Only)
+        // 1. Verify PIN and Balance
+        const senderWallet = await Wallet.findOne({ user: req.user._id });
+        if (!senderWallet) return res.status(404).json({ message: 'Wallet not found' });
+
+        if (!senderWallet.pin || !(await bcrypt.compare(pin, senderWallet.pin))) {
+            return res.status(401).json({ message: 'Invalid PIN' });
+        }
+
+        if (senderWallet.balance < amount) {
+            return res.status(400).json({ message: 'Insufficient balance' });
+        }
+
+        // 2. Find Recipient (by Phone Only)
         const recipientUser = await User.findOne({ phone });
 
         if (!recipientUser) {
             return res.status(404).json({ message: 'Recipient with this phone number not found' });
         }
 
-        // 2. Find Sender Wallet and Check Balance (Atomic Check & Deduct)
-        const senderWallet = await Wallet.findOneAndUpdate(
-            { user: req.user._id, balance: { $gte: amount } },
-            { $inc: { balance: -amount } },
-            { new: true }
-        );
+        // 3. Deduct from Sender
+        senderWallet.balance -= Number(amount);
+        await senderWallet.save();
 
-        if (!senderWallet) {
-            return res.status(400).json({ message: 'Insufficient balance' });
-        }
-
-        // 3. Add to Recipient (Atomic Add)
+        // 4. Add to Recipient (Atomic Add)
         let recipientWallet = await Wallet.findOneAndUpdate(
             { user: recipientUser._id },
             { $inc: { balance: amount } },
             { new: true, upsert: true } // Create if doesn't exist
         );
 
-        // 4. Log Transactions for both sides
+        // 5. Log Transactions for both sides
         // Sender Log
         await WalletTransaction.create({
             wallet: senderWallet._id,
