@@ -26,13 +26,16 @@ const SummaryCard = ({ title, value, icon: Icon, trend, trendValue, color }) => 
     </CardHeader>
     <CardContent>
       <div className="text-2xl font-bold">₹{value.toLocaleString()}</div>
-      <p className="text-xs text-muted-foreground mt-1">
+      <p className="text-xs text-muted-foreground mt-1 min-h-[1.25rem] flex items-center">
         {trendValue && (
-            trend === 'up' ? 
-            <span className="text-emerald-500 flex items-center gap-1"><FiArrowUp /> {trendValue}</span> : 
-            <span className="text-rose-500 flex items-center gap-1"><FiArrowDown /> {trendValue}</span>
+            <>
+                {trend === 'up' ? 
+                <span className="text-emerald-500 flex items-center gap-1"><FiArrowUp /> {trendValue}</span> : 
+                <span className="text-rose-500 flex items-center gap-1"><FiArrowDown /> {trendValue}</span>
+                }
+                <span className="ml-1">from last month</span>
+            </>
         )}
-        <span className="ml-1">{trendValue ? "from last month" : "No data available"}</span>
       </p>
     </CardContent>
   </Card>
