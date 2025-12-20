@@ -14,7 +14,7 @@ const Navbar = ({ toggleSidebar }) => {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
-  const isLanding = location.pathname === '/' || location.pathname === '/landing';
+  const isLanding = ['/', '/landing', '/about', '/privacy', '/terms'].includes(location.pathname);
 
   // Notification State
   const [notifications, setNotifications] = useState([]);
@@ -110,10 +110,45 @@ const Navbar = ({ toggleSidebar }) => {
     }, 50);
   };
 
+  // Scroll Logic for Smart Navbar (Hide on scroll down, Show on scroll up)
+  const [isNavVisible, setIsNavVisible] = useState(true);
+  const [lastScrollY, setLastScrollY] = useState(0);
+
+  useEffect(() => {
+      // Only apply smart scroll behavior on Landing/Public pages
+      if (!isLanding) {
+          setIsNavVisible(true);
+          return;
+      }
+
+      const controlNavbar = () => {
+          if (typeof window !== 'undefined') {
+              if (window.scrollY === 0) {
+                  // Always show at very top
+                  setIsNavVisible(true);
+              } else if (window.scrollY > lastScrollY && window.scrollY > 100) {
+                  // Scrolling Down -> Hide
+                  setIsNavVisible(false);
+              } else if (window.scrollY < lastScrollY) {
+                  // Scrolling Up -> Show
+                  setIsNavVisible(true);
+              }
+              setLastScrollY(window.scrollY);
+          }
+      };
+
+      window.addEventListener('scroll', controlNavbar);
+      return () => {
+          window.removeEventListener('scroll', controlNavbar);
+      };
+  }, [lastScrollY, isLanding]);
+
   // 1. Floating Glassmorphic Navbar (Landing Page Only)
   if (isLanding) {
     return (
-      <header className="fixed top-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-7xl transition-all duration-300">
+      <header className={`fixed top-6 left-1/2 z-50 w-[95%] max-w-7xl transition-all duration-300 transform -translate-x-1/2 ${
+          isNavVisible ? 'translate-y-0 opacity-100' : '-translate-y-[200%] opacity-0'
+      }`}>
         <div className="flex items-center justify-between rounded-full border border-border/40 bg-background/60 px-6 py-3 shadow-2xl backdrop-blur-xl supports-[backdrop-filter]:bg-background/30">
           <div className="flex items-center gap-4">
              {/* Note: Sidebar toggle usually hidden on landing, but keeping logic consistent just in case */}

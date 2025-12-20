@@ -51,7 +51,11 @@ const App = () => {
             <Route path="/" element={<LandingRedirectOrDashboard />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/register" element={<Register />} />
             <Route path="/landing" element={<Landing />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
 
             {/* Protected Dashboard Layout Routes */}
             {/* The layout adds sidebar/navbar, so we only want this for actual app pages */}

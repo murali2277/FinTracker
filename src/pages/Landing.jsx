@@ -66,18 +66,18 @@ const Landing = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <FeatureCard 
               icon={<FiActivity className="w-10 h-10 text-primary" />}
-              title="Real-time Tracking"
-              description="Log transactions instantly and see your balance update in real-time. Never miss a penny."
+              title="Digital Wallet"
+              description="Top up your protected wallet and manage your personal funds securely with a PIN."
             />
             <FeatureCard 
               icon={<FiPieChart className="w-10 h-10 text-primary" />}
-              title="Visual Analytics"
-              description="Beautiful charts and graphs help you understand exactly where your money goes every month."
+              title="Friends & Payments"
+              description="Add friends and send money instantly using just their phone number. Settling up made easy."
             />
             <FeatureCard 
               icon={<FiShield className="w-10 h-10 text-primary" />}
-              title="Secure & Private"
-              description="Your financial data is encrypted and secure. We prioritize your privacy above all else."
+              title="Smart Goals (₹)"
+              description="Set financial goals in Rupee and get AI-powered strategies to reach them faster."
             />
           </div>
         </div>
@@ -97,8 +97,8 @@ const Landing = () => {
              </div>
              <div className="space-y-4">
                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto text-xl font-bold text-primary">2</div>
-               <h3 className="text-xl font-semibold">Log Transactions</h3>
-               <p className="text-muted-foreground">Add your income and expenses with a simple, intuitive interface.</p>
+               <h3 className="text-xl font-semibold">Top Up & Track</h3>
+               <p className="text-muted-foreground">Add money to your wallet or log your daily income and expenses.</p>
              </div>
              <div className="space-y-4">
                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto text-xl font-bold text-primary">3</div>

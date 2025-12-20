@@ -1,9 +1,14 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
+import Navbar from '../components/layout/Navbar';
+import Footer from '../components/layout/Footer';
+
 const About = () => {
   return (
-    <div className="container mx-auto px-4 py-32 max-w-4xl">
+    <div className="flex flex-col min-h-screen">
+      <Navbar />
+      <div className="flex-grow container mx-auto px-4 py-32 max-w-4xl">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -29,6 +34,8 @@ const About = () => {
           </ul>
         </div>
       </motion.div>
+      </div>
+      <Footer />
     </div>
   );
 };
