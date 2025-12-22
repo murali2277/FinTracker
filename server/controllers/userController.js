@@ -1,6 +1,8 @@
 import asyncHandler from 'express-async-handler';
 import User from '../models/User.js';
+import Verification from '../models/Verification.js';
 import generateToken from '../utils/generateToken.js';
+import sendEmail from '../utils/sendEmail.js'; // Import
 import Transaction from '../models/Transaction.js';
 import Goal from '../models/Goal.js';
 import Reminder from '../models/Reminder.js';
@@ -9,17 +11,112 @@ import Wallet from '../models/Wallet.js';
 import WalletTransaction from '../models/WalletTransaction.js';
 import FriendRequest from '../models/FriendRequest.js';
 
+// Helper to generate 6-digit OTP
+const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+// @desc    Send OTP for verification (Email & Phone)
+// @route   POST /api/users/send-otp
+// @access  Public
+// @desc    Send OTP for verification (Email & Phone)
+// @route   POST /api/users/send-otp
+// @access  Public
+const sendVerificationOTP = asyncHandler(async (req, res) => {
+    const { email, phone } = req.body;
+
+    if (!email || !phone) {
+        res.status(400);
+        throw new Error('Email and Phone number are required');
+    }
+
+    // Check if user already exists
+    const userExists = await User.findOne({ $or: [{ email }, { phone }] });
+    if (userExists) {
+        res.status(400);
+        throw new Error('User already exists');
+    }
+
+    const otp = generateOTP();
+
+    // Store in DB (TTL handles expiry)
+    // First, delete any previous incomplete attempts for this email/phone
+    await Verification.deleteMany({ $or: [{ email }, { phone }] });
+
+    await Verification.create({
+        email,
+        phone,
+        otp
+    });
+
+    // Send Email
+    try {
+        const message = `
+            <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+                <h2 style="color: #4F46E5;">FinTracker Verification</h2>
+                <p>You requested a verification code for your account registration.</p>
+                <div style="margin: 20px 0;">
+                    <span style="font-size: 24px; font-weight: bold; letter-spacing: 5px; background: #EEF2FF; padding: 10px 20px; border-radius: 5px; color: #4F46E5;">${otp}</span>
+                </div>
+                <p>This code is valid for 10 minutes.</p>
+                <p style="font-size: 12px; color: #888;">If you didn't request this, please ignore this email.</p>
+            </div>
+        `;
+
+        await sendEmail({
+            email: email,
+            subject: 'Your FinTracker Verification Code',
+            message: message
+        });
+
+        console.log(`[EMAIL SENT] -> OTP sent to ${email}`);
+    } catch (error) {
+        console.error("Email send failed details:");
+        console.error("Error Message:", error.message);
+        if (error.response) {
+            console.error("SMTP Response:", error.response);
+        }
+        console.log(`[FALLBACK - EMAIL FAILED] OTP: ${otp}`);
+        
+        // If email fails, we shouldn't fail the whole request in DEV, but in PROD we might want to.
+        // warning the user via response could be helpful
+        // res.status(500); throw new Error("Email service failed");
+    }
+
+    // SIMULATE SENDING PHONE (In production, replace with Twilio)
+    console.log(`[SIMULATED SMS] -> Phone OTP for ${phone}: ${otp}`);
+
+    res.json({ message: 'OTP sent successfully to email and phone.' });
+});
+
 // @desc    Register a new user
 // @route   POST /api/users
 // @access  Public
 const registerUser = asyncHandler(async (req, res) => {
-  const { name, email, phone, password } = req.body;
+  const { name, email, phone, password, otp } = req.body;
 
   if (!name || !email || !password || !phone) {
       res.status(400);
       throw new Error('Please include all fields (Name, Email, Phone, Password)');
   }
 
+  // 1. Verify OTPs First!
+  if (!otp) {
+      res.status(400);
+      throw new Error('Verification failed: OTP is required');
+  }
+
+  const verification = await Verification.findOne({ email, phone });
+
+  if (!verification) {
+      res.status(400);
+      throw new Error('Verification session expired or invalid. Please request OTP again.');
+  }
+
+  if (verification.otp !== otp) {
+      res.status(400);
+      throw new Error('Invalid OTP. Please check and try again.');
+  }
+
+  // 2. Double check user existence (race condition safety)
   const userExists = await User.findOne({ 
       $or: [{ email }, { phone }] 
   });
@@ -29,6 +126,7 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new Error('User already exists (email or phone)');
   }
 
+  // 3. Create User
   const user = await User.create({
     name,
     email,
@@ -37,10 +135,14 @@ const registerUser = asyncHandler(async (req, res) => {
   });
 
   if (user) {
+    // Cleanup verification doc
+    await Verification.deleteOne({ _id: verification._id });
+
     res.status(201).json({
       _id: user._id,
       name: user.name,
       email: user.email,
+      phone: user.phone,
       token: generateToken(user._id),
     });
   } else {
@@ -62,6 +164,7 @@ const authUser = asyncHandler(async (req, res) => {
       _id: user._id,
       name: user.name,
       email: user.email,
+      phone: user.phone,
       token: generateToken(user._id),
     });
   } else {
@@ -172,4 +275,4 @@ const deleteUserAccount = asyncHandler(async (req, res) => {
   }
 });
 
-export { registerUser, authUser, getUsers, updateUserProfile, deleteUserAccount };
+export { registerUser, authUser, getUsers, updateUserProfile, deleteUserAccount, sendVerificationOTP };

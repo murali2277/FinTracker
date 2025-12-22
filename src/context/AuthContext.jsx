@@ -26,10 +26,10 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('user');
   };
 
-  const register = async (name, email, phone, password) => {
+  const register = async (name, email, phone, password, otp) => {
     setLoading(true);
     try {
-      const { data } = await axios.post('/api/users', { name, email, phone, password });
+      const { data } = await axios.post('/api/users', { name, email, phone, password, otp });
       setUser(data);
       localStorage.setItem('user', JSON.stringify(data));
       setLoading(false);
