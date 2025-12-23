@@ -37,6 +37,11 @@ app.get('/', (req, res) => {
   res.send('API is running...');
 });
 
+// Health Check Endpoint for UptimeRobot
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok', message: 'Server is active' });
+});
+
 app.use('/api/users', userRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/reminders', reminderRoutes);
