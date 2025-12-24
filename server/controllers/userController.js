@@ -255,8 +255,6 @@ const deleteUserAccount = asyncHandler(async (req, res) => {
     await Reminder.deleteMany({ user: user._id });
     await Notification.deleteMany({ user: user._id });
     await Wallet.deleteOne({ user: user._id });
-    // Delete wallet transactions where this user was involved
-    await WalletTransaction.deleteMany({ user: user._id });
     
     // 2. Cleanup Friend Relations
     await FriendRequest.deleteMany({ 
