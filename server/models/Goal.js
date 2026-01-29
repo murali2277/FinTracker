@@ -39,7 +39,36 @@ const goalSchema = new mongoose.Schema({
     type: String,
     enum: ['High', 'Medium', 'Low'],
     default: 'Medium',
-  }
+  },
+  // Category for savings tracking
+  category: {
+    type: String,
+    default: 'General Savings'
+  },
+  // Track savings added to this goal
+  savingsHistory: [
+    {
+      amount: Number,
+      date: { type: Date, default: Date.now },
+      source: String // 'dashboard' or 'goal_update'
+    }
+  ],
+  // AI Strategy Cache
+  cachedStrategies: {
+    type: [String],
+    default: []
+  },
+  strategiesLastGenerated: {
+    type: Date,
+    default: null
+  },
+  // Saved/bookmarked strategies
+  savedStrategies: [
+    {
+      strategy: String,
+      savedAt: { type: Date, default: Date.now }
+    }
+  ]
 }, {
   timestamps: true
 });

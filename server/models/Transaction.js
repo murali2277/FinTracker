@@ -35,6 +35,12 @@ const transactionSchema = new mongoose.Schema({
   paymentMode: {
     type: String,
     required: [true, 'Please add a payment mode'],
+  },
+  // Link savings transactions to specific goals
+  linkedGoalId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Goal',
+    default: null
   }
 }, {
   timestamps: true

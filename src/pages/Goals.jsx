@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { FiPlus, FiTarget, FiTrendingUp, FiAlertCircle, FiCheckCircle, FiZap, FiX } from 'react-icons/fi';
+import { FiPlus, FiTarget, FiTrendingUp, FiAlertCircle, FiCheckCircle, FiZap, FiX, FiHeart } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 
 const Goals = () => {
@@ -16,6 +16,7 @@ const Goals = () => {
   // Strategy Internal State
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [strategyLoading, setStrategyLoading] = useState(false);
+  const [savedStrategiesGoal, setSavedStrategiesGoal] = useState(null);
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
@@ -87,13 +88,19 @@ const Goals = () => {
   };
 
   const handleGetStrategy = async (goal) => {
-      setSelectedStrategy({ title: goal.title, loading: true, items: [] });
+      setSelectedStrategy({ title: goal.title, loading: true, items: [], isCached: false, goalId: goal._id });
       setStrategyLoading(true);
       
       try {
           const config = { headers: { Authorization: `Bearer ${user.token}` } };
           const { data } = await axios.get(`/api/goals/${goal._id}/strategy`, config);
-          setSelectedStrategy({ title: goal.title, loading: false, items: data.strategies });
+          setSelectedStrategy({ 
+              title: goal.title, 
+              loading: false, 
+              items: data.strategies,
+              isCached: data.cached || false,
+              goalId: goal._id
+          });
       } catch (error) {
           toast.error("Could not fetch AI advice");
           setSelectedStrategy(null);
@@ -102,17 +109,66 @@ const Goals = () => {
       }
   };
 
+  const handleRefreshStrategy = async (goalId) => {
+      try {
+          const config = { headers: { Authorization: `Bearer ${user.token}` } };
+          await axios.post(`/api/goals/${goalId}/strategy/refresh`, {}, config);
+          toast.success('Cache cleared! Generating fresh strategies...');
+          // Refetch strategies
+          const { data } = await axios.get(`/api/goals/${goalId}/strategy`, config);
+          setSelectedStrategy({
+              title: selectedStrategy.title,
+              loading: false,
+              items: data.strategies,
+              isCached: data.cached || false,
+              goalId: goalId
+          });
+      } catch (error) {
+          toast.error('Failed to refresh');
+      }
+  };
+
+  const handleSaveStrategy = async (goalId, strategy) => {
+      try {
+          const config = { headers: { Authorization: `Bearer ${user.token}` } };
+          await axios.post(`/api/goals/${goalId}/strategy/save`, { strategy }, config);
+          toast.success('Strategy saved!');
+      } catch (error) {
+          const message = error.response?.data?.message || 'Failed to save';
+          toast.error(message);
+      }
+  };
+
+  const handleRemoveStrategy = async (goalId, strategyText) => {
+      try {
+          const config = { headers: { Authorization: `Bearer ${user.token}` } };
+          await axios.post(`/api/goals/${goalId}/strategy/remove`, { strategy: strategyText }, config);
+          toast.success('Strategy removed!');
+          // Update saved strategies goal
+          setSavedStrategiesGoal(prev => ({
+              ...prev,
+              savedStrategies: prev.savedStrategies.filter(item => {
+                  const text = typeof item === 'string' ? item : item.strategy;
+                  return text !== strategyText;
+              })
+          }));
+      } catch (error) {
+          const message = error.response?.data?.message || 'Failed to remove';
+          toast.error(message);
+      }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in-up">
-      <div className="flex justify-between items-center">
-        <div>
-           <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">Financial Goals</h1>
-           <p className="text-muted-foreground text-sm">Visualize and accelerate your savings journey.</p>
+        <div className="flex justify-between items-center">
+          <div>
+             <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">Financial Goals</h1>
+             <p className="text-muted-foreground text-sm">Visualize and accelerate your savings journey.</p>
+          </div>
+          <Button onClick={() => setShowModal(true)} className="bg-blue-600 hover:bg-blue-700">
+             <FiPlus className="mr-2" /> New Goal
+          </Button>
         </div>
-        <Button onClick={() => setShowModal(true)} className="bg-blue-600 hover:bg-blue-700">
-           <FiPlus className="mr-2" /> New Goal
-        </Button>
-      </div>
 
       {/* Analysis Section */}
       {/* Analysis Section */}
@@ -257,18 +313,18 @@ const Goals = () => {
                             <Button 
                                 variant="outline" 
                                 size="sm" 
-                                className="flex-1 text-xs border-dashed"
-                                onClick={() => handleUpdateAmount(goal._id, goal.currentAmount, 100)}
-                            >
-                                + ₹100
-                            </Button>
-                            <Button 
-                                variant="outline" 
-                                size="sm" 
                                 className="flex-1 text-xs border-dashed bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
                                 onClick={() => handleGetStrategy(goal)}
                             >
                                 <FiZap className="mr-1" /> AI Tips
+                            </Button>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="flex-1 text-xs border-dashed bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
+                                onClick={() => setSavedStrategiesGoal(goal)}
+                            >
+                                <FiHeart className="mr-1" /> Saved
                             </Button>
                         </div>
                     </CardContent>
@@ -349,12 +405,16 @@ const Goals = () => {
       {/* Strategy Modal */}
       {selectedStrategy && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-             <Card className="w-full max-w-md bg-background shadow-xl border-indigo-200">
-                 <CardHeader className="flex flex-row items-center justify-between pb-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-t-lg">
-                     <CardTitle className="text-lg flex items-center gap-2">
-                         <FiZap className="fill-yellow-300 text-yellow-300" /> 
-                         AI Strategy: {selectedStrategy.title}
-                     </CardTitle>
+             <Card className="w-full max-w-md bg-background shadow-xl border-indigo-200 overflow-hidden">
+                 <CardHeader className="flex flex-row items-center justify-between p-4 bg-indigo-600 text-white rounded-t-lg m-0">
+                     <div className="flex flex-col gap-1">
+                         <CardTitle className="text-lg flex items-center gap-2">
+                             AI Strategy: {selectedStrategy.title}
+                         </CardTitle>
+                         {selectedStrategy.isCached && (
+                             <span className="text-xs opacity-75">📋 Showing cached result (tap Refresh for new)</span>
+                         )}
+                     </div>
                      <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={() => setSelectedStrategy(null)}>
                          <FiX />
                      </Button>
@@ -368,11 +428,18 @@ const Goals = () => {
                      ) : (
                          <div className="space-y-4">
                              {selectedStrategy.items.map((strategy, index) => (
-                                 <div key={index} className="flex gap-3 bg-muted/30 p-3 rounded-lg border border-border/50">
+                                 <div key={index} className="group relative flex gap-3 bg-muted/30 p-3 rounded-lg border border-border/50 hover:border-indigo-300 transition-colors">
                                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold mt-0.5">
                                          {index + 1}
                                      </span>
-                                     <p className="text-sm text-foreground/90 leading-relaxed">{strategy}</p>
+                                     <p className="text-sm text-foreground/90 leading-relaxed flex-1">{strategy}</p>
+                                     <button
+                                         onClick={() => handleSaveStrategy(selectedStrategy.goalId, strategy)}
+                                         className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 text-rose-500 hover:text-rose-600 hover:scale-110"
+                                         title="Save strategy"
+                                     >
+                                         <FiHeart className="w-5 h-5" />
+                                     </button>
                                  </div>
                              ))}
                              <div className="pt-2">
@@ -382,7 +449,73 @@ const Goals = () => {
                              </div>
                          </div>
                      )}
-                     <Button className="w-full mt-6" onClick={() => setSelectedStrategy(null)}>
+                     <div className="flex gap-2 mt-6">
+                         <Button 
+                             variant="outline"
+                             className="flex-1"
+                             onClick={() => handleRefreshStrategy(selectedStrategy.goalId)}
+                         >
+                             Refresh
+                         </Button>
+                         <Button 
+                             className="flex-1" 
+                             onClick={() => setSelectedStrategy(null)}
+                         >
+                             Got it!
+                         </Button>
+                     </div>
+                 </CardContent>
+             </Card>
+        </div>
+      )}
+
+      {/* Saved Strategies Modal */}
+      {savedStrategiesGoal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
+             <Card className="w-full max-w-md bg-background shadow-xl border-blue-200 overflow-hidden">
+                 <CardHeader className="flex flex-row items-center justify-between px-4 py-2 bg-blue-600 text-white rounded-t-lg m-0">
+                     <div className="flex flex-col gap-1">
+                         <CardTitle className="text-lg flex items-center gap-2">
+                             <FiHeart className="fill-white text-white" /> 
+                             Saved Strategies: {savedStrategiesGoal.title}
+                         </CardTitle>
+                     </div>
+                     <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={() => setSavedStrategiesGoal(null)}>
+                         <FiX />
+                     </Button>
+                 </CardHeader>
+                 <CardContent className="pt-6">
+                     {!savedStrategiesGoal.savedStrategies || savedStrategiesGoal.savedStrategies.length === 0 ? (
+                         <div className="flex flex-col items-center justify-center py-8 space-y-2">
+                            <FiHeart className="w-8 h-8 text-blue-300" />
+                             <p className="text-sm text-muted-foreground text-center">No saved strategies yet. Click <FiHeart className="inline w-4 h-4 text-rose-500 fill-rose-500" /> on strategies you like!</p>
+                         </div>
+                     ) : (
+                         <div className="space-y-4">
+                             {savedStrategiesGoal.savedStrategies.map((item, index) => {
+                                 const strategyText = typeof item === 'string' ? item : item.strategy;
+                                 return (
+                                     <div key={index} className="group flex gap-3 bg-muted/30 p-3 rounded-lg border border-border/50 hover:border-blue-300 transition-colors">
+                                         <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold mt-0.5">
+                                             {index + 1}
+                                         </span>
+                                         <p className="text-sm text-foreground/90 leading-relaxed flex-1">{strategyText}</p>
+                                         <button
+                                             onClick={() => handleRemoveStrategy(savedStrategiesGoal._id, strategyText)}
+                                             className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 text-gray-400 hover:text-rose-500"
+                                             title="Remove strategy"
+                                         >
+                                             <FiX className="w-5 h-5" />
+                                         </button>
+                                     </div>
+                                 );
+                             })}
+                         </div>
+                     )}
+                     <Button 
+                         className="w-full mt-6" 
+                         onClick={() => setSavedStrategiesGoal(null)}
+                     >
                          Got it!
                      </Button>
                  </CardContent>

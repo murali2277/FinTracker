@@ -2,6 +2,9 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import Goal from '../models/Goal.js';
 import Transaction from '../models/Transaction.js';
 
+// Helper function to sleep/delay
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 // @desc    Get AI Strategy for a specific goal
 // @route   GET /api/goals/:id/strategy
 // @access  Private
@@ -9,6 +12,22 @@ export const getGoalStrategy = async (req, res) => {
     try {
         const goal = await Goal.findById(req.params.id);
         if (!goal) return res.status(404).json({ message: 'Goal not found' });
+
+        // Check if we have cached strategies (valid for 24 hours)
+        const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+        const now = new Date();
+        
+        if (goal.cachedStrategies && 
+            goal.cachedStrategies.length > 0 && 
+            goal.strategiesLastGenerated &&
+            (now - new Date(goal.strategiesLastGenerated)) < CACHE_DURATION_MS) {
+            // Return cached strategies
+            return res.json({ 
+                strategies: goal.cachedStrategies,
+                cached: true,
+                cachedAt: goal.strategiesLastGenerated
+            });
+        }
 
         // Context: Get recent spending habits for better advice
         const threeMonthsAgo = new Date();
@@ -30,40 +49,180 @@ export const getGoalStrategy = async (req, res) => {
 
         const prompt = `
         You are a financial advisor. The user has a goal: "${goal.title}".
-        - Target: $${goal.targetAmount}
-        - Saved: $${goal.currentAmount}
-        - Deadline: ${goal.targetDate ? new Date(goal.targetDate).toDateString() : 'None'}
+        - Target Amount: ₹${goal.targetAmount}
+        - Currently Saved: ₹${goal.currentAmount}
+        - Remaining: ₹${goal.targetAmount - goal.currentAmount}
+        - Deadline: ${goal.targetDate ? new Date(goal.targetDate).toDateString() : 'No deadline'}
         - Priority: ${goal.priority}
         
-        User's Top Expenses (last 2 months): ${topExpenses || "No recent data"}
+        User's Top Expenses (last 2 months): ${topExpenses || "No expense data available"}
 
-        Task: Provide 3 short, specific, and actionable strategies to reach this goal faster. 
-        Focus on cutting down the specific top expenses mentioned if relevant.
-        return as a JSON array of strings e.g. ["Strategy 1", "Strategy 2", "Strategy 3"].
-        Do not include markdown code blocks. Just the raw JSON.
+        IMPORTANT: Provide 4 detailed, expense-focused strategies. Each strategy should:
+        1. Analyze their TOP EXPENSE CATEGORIES
+        2. Suggest SPECIFIC reduction targets (e.g., "Reduce Shopping by 30%")
+        3. Give concrete ACTION STEPS (not generic advice)
+        4. Show MONTHLY SAVINGS potential from the reduction
+        
+        Format as JSON array like: [
+          "Strategy with specific amount and deadline",
+          "Another concrete strategy with numbers",
+          "Third strategy analyzing categories",
+          "Fourth strategy with action plan"
+        ]
+        
+        Make strategies DETAILED, SPECIFIC, and ACTIONABLE based on their actual spending patterns.
+        Do not include markdown code blocks. Just the raw JSON array.
         `;
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        let text = response.text().trim();
+        // Retry logic with exponential backoff
+        let strategies = [];
+        let retryCount = 0;
+        const MAX_RETRIES = 3;
         
-        // Clean cleanup
-        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        while (retryCount < MAX_RETRIES) {
+            try {
+                const result = await model.generateContent(prompt);
+                const response = await result.response;
+                let text = response.text().trim();
+                
+                // Clean cleanup
+                text = text.replace(/```json/g, '').replace(/```/g, '').trim();
 
-        // Safe JSON parsing
-        try {
-             res.json({ strategies: JSON.parse(text) });
-        } catch (e) {
-             // Fallback if AI returns plain text
-             res.json({ strategies: [text] });
+                // Safe JSON parsing
+                try {
+                    strategies = JSON.parse(text);
+                } catch (e) {
+                    // Fallback if AI returns plain text
+                    strategies = [text];
+                }
+                
+                // Success - cache the strategies
+                goal.cachedStrategies = strategies;
+                goal.strategiesLastGenerated = new Date();
+                await goal.save();
+                
+                return res.json({ strategies, cached: false });
+                
+            } catch (apiError) {
+                if (apiError.status === 429) {
+                    retryCount++;
+                    
+                    // If we have cached strategies (even if expired), return them
+                    if (goal.cachedStrategies && goal.cachedStrategies.length > 0) {
+                        console.log('Rate limited, returning cached strategies');
+                        return res.json({ 
+                            strategies: goal.cachedStrategies,
+                            cached: true,
+                            message: 'AI limit reached. Showing previous suggestions.',
+                            cachedAt: goal.strategiesLastGenerated
+                        });
+                    }
+                    
+                    // If we have retries left, wait and retry
+                    if (retryCount < MAX_RETRIES) {
+                        const delayMs = Math.pow(2, retryCount) * 1000; // Exponential backoff: 2s, 4s, 8s
+                        console.log(`Rate limited, retrying in ${delayMs}ms (attempt ${retryCount}/${MAX_RETRIES})`);
+                        await sleep(delayMs);
+                    } else {
+                        // Out of retries, return generic suggestions
+                        const genericStrategies = [
+                            `Save $${Math.ceil((goal.targetAmount - goal.currentAmount) / 12)} per month to reach your goal in a year`,
+                            "Track your daily expenses to identify areas where you can cut back",
+                            "Set up automatic transfers to your savings on payday"
+                        ];
+                        return res.json({ 
+                            strategies: genericStrategies,
+                            cached: false,
+                            message: 'AI temporarily unavailable. Here are general tips.',
+                            isGeneric: true
+                        });
+                    }
+                } else {
+                    throw apiError; // Re-throw non-429 errors
+                }
+            }
         }
 
     } catch (error) {
         console.error("AI Strategy Failed:", error);
-        if (error.status === 429) {
-             return res.status(429).json({ message: " AI usage limit reached. Please try again in a minute." });
+        
+        // Try to return cached strategies if available
+        const goal = await Goal.findById(req.params.id);
+        if (goal && goal.cachedStrategies && goal.cachedStrategies.length > 0) {
+            return res.json({ 
+                strategies: goal.cachedStrategies,
+                cached: true,
+                message: 'Using previous suggestions due to temporary error.',
+                cachedAt: goal.strategiesLastGenerated
+            });
         }
-        res.status(500).json({ message: "Could not generate strategy" });
+        
+        // Return generic fallback strategies
+        const remaining = goal ? goal.targetAmount - goal.currentAmount : 0;
+        const genericStrategies = [
+            remaining > 0 ? `Save $${Math.ceil(remaining / 12)} per month to reach your goal in a year` : "Great job! You've reached your goal!",
+            "Review your expenses weekly and identify unnecessary spending",
+            "Consider setting up automatic savings to stay on track"
+        ];
+        
+        res.json({ 
+            strategies: genericStrategies,
+            isGeneric: true,
+            message: 'AI service temporarily unavailable. Here are general tips.'
+        });
+    }
+};
+
+// @desc    Refresh/Clear cached strategies to force new generation
+// @route   POST /api/goals/:id/strategy/refresh
+// @access  Private
+export const refreshStrategy = async (req, res) => {
+    try {
+        const goal = await Goal.findById(req.params.id);
+        if (!goal) return res.status(404).json({ message: 'Goal not found' });
+        if (goal.user.toString() !== req.user._id.toString()) {
+            return res.status(401).json({ message: 'Not authorized' });
+        }
+
+        // Clear the cache
+        goal.cachedStrategies = [];
+        goal.strategiesLastGenerated = null;
+        await goal.save();
+
+        res.json({ message: 'Cache cleared. New strategies will be generated on next request.' });
+    } catch (error) {
+        console.error("Refresh failed:", error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Save a strategy as favorite/bookmark
+// @route   POST /api/goals/:id/strategy/save
+// @access  Private
+export const saveStrategy = async (req, res) => {
+    try {
+        const { strategy } = req.body;
+        if (!strategy) return res.status(400).json({ message: 'Strategy text required' });
+
+        const goal = await Goal.findById(req.params.id);
+        if (!goal) return res.status(404).json({ message: 'Goal not found' });
+        if (goal.user.toString() !== req.user._id.toString()) {
+            return res.status(401).json({ message: 'Not authorized' });
+        }
+
+        // Add to saved strategies if not already saved
+        const alreadySaved = goal.savedStrategies.some(s => s.strategy === strategy);
+        if (alreadySaved) {
+            return res.status(400).json({ message: 'Strategy already saved' });
+        }
+
+        goal.savedStrategies.push({ strategy, savedAt: new Date() });
+        await goal.save();
+
+        res.json({ message: 'Strategy saved!', savedStrategies: goal.savedStrategies });
+    } catch (error) {
+        console.error("Save strategy failed:", error);
+        res.status(500).json({ message: error.message });
     }
 };
 
@@ -229,7 +388,11 @@ export const getGoalAnalysis = async (req, res) => {
                 
                 if (monthsToDeadline > 0) requiredMonthly = remaining / monthsToDeadline;
 
-                if (monthsToGoal !== Infinity && monthsToDeadline !== null) {
+                // Check if no savings
+                if (monthsToGoal === Infinity) {
+                    // Not saving any money
+                    comparisonText = "Need to start saving";
+                } else if (monthsToDeadline !== null) {
                     const diff = monthsToDeadline - monthsToGoal;
                     if (diff >= 1) {
                         comparisonText = `${Math.floor(diff)} mo earlier than deadline`;
@@ -273,3 +436,31 @@ export const getGoalAnalysis = async (req, res) => {
         res.status(500).json({ message: "Analysis failed" });
     }
 }
+
+// @desc    Remove a saved strategy
+// @route   POST /api/goals/:id/strategy/remove
+// @access  Private
+export const removeStrategy = async (req, res) => {
+    try {
+        const { strategy } = req.body;
+        if (!strategy) return res.status(400).json({ message: 'Strategy text required' });
+
+        const goal = await Goal.findById(req.params.id);
+        if (!goal) return res.status(404).json({ message: 'Goal not found' });
+        if (goal.user.toString() !== req.user._id.toString()) {
+            return res.status(401).json({ message: 'Not authorized' });
+        }
+
+        // Remove from saved strategies
+        goal.savedStrategies = goal.savedStrategies.filter(s => {
+            const text = typeof s === 'string' ? s : s.strategy;
+            return text !== strategy;
+        });
+        await goal.save();
+
+        res.json({ message: 'Strategy removed!', savedStrategies: goal.savedStrategies });
+    } catch (error) {
+        console.error("Remove strategy failed:", error);
+        res.status(500).json({ message: error.message });
+    }
+};

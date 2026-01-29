@@ -26,14 +26,15 @@ const SummaryCard = ({ title, value, icon: Icon, trend, trendValue, color }) => 
     </CardHeader>
     <CardContent>
       <div className="text-2xl font-bold">₹{value.toLocaleString()}</div>
-      <p className="text-xs text-muted-foreground mt-1">
-        {trendValue && (
-            trend === 'up' ? 
+      {trendValue && (
+        <p className="text-xs text-muted-foreground mt-1">
+          {trend === 'up' ? 
             <span className="text-emerald-500 flex items-center gap-1"><FiArrowUp /> {trendValue}</span> : 
             <span className="text-rose-500 flex items-center gap-1"><FiArrowDown /> {trendValue}</span>
-        )}
-        <span className="ml-1">{trendValue ? "from last month" : "No data available"}</span>
-      </p>
+          }
+          <span className="ml-1">from last month</span>
+        </p>
+      )}
     </CardContent>
   </Card>
 );
@@ -60,6 +61,9 @@ const Dashboard = () => {
         monthlyData: []
     });
     
+    // Goals state for goal-based savings
+    const [goals, setGoals] = useState([]);
+    
     // Add Transaction Form State
     const [formData, setFormData] = useState({
         type: 'expense', // income, expense, savings
@@ -68,7 +72,8 @@ const Dashboard = () => {
         amount: '',
         date: new Date().toISOString().split('T')[0],
         category: 'Uncategorized',
-        paymentMode: 'UPI', 
+        paymentMode: 'UPI',
+        linkedGoalId: null // For goal-based savings
     });
     
     const [lastFormData, setLastFormData] = useState(null);
@@ -81,14 +86,19 @@ const Dashboard = () => {
                 headers: { Authorization: `Bearer ${user.token}` },
             };
 
-            // Parallel Fetch: Transactions & Wallet
-            const [txRes, walletRes] = await Promise.all([
+            // Parallel Fetch: Transactions, Wallet & Goals
+            const [txRes, walletRes, goalsRes] = await Promise.all([
                 axios.get('/api/transactions', config),
-                axios.get('/api/wallet', config).catch(() => ({ data: { balance: 0 } })) // Fallback if wallet fails
+                axios.get('/api/wallet', config).catch(() => ({ data: { balance: 0 } })),
+                axios.get('/api/goals', config).catch(() => ({ data: [] })) // Fetch goals for savings linking
             ]);
             
             const data = txRes.data;
             const walletBalance = walletRes.data.balance || 0;
+            const goalsData = goalsRes.data || [];
+            
+            // Store goals for the form
+            setGoals(goalsData);
             
             // Calculate Summary
             let income = 0;
@@ -165,7 +175,8 @@ const Dashboard = () => {
             type: newType,
             subType: defaultsubType,
             category: defaultCategory,
-            paymentMode: defaultMode
+            paymentMode: defaultMode,
+            linkedGoalId: null // Reset goal when changing type
         });
     };
 
@@ -412,6 +423,29 @@ const Dashboard = () => {
                     ))}
                 </select>
               </div>
+
+              {/* Goal Selector - Only for Goal-based Savings */}
+              {formData.type === 'savings' && formData.subType === 'Goal-based' && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium leading-none">Select Goal</label>
+                  <select 
+                    name="linkedGoalId"
+                    value={formData.linkedGoalId || ''}
+                    onChange={handleChange}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <option value="">Choose a goal...</option>
+                    {goals.map(goal => (
+                      <option key={goal._id} value={goal._id}>
+                        {goal.title} - ₹{goal.currentAmount.toLocaleString()}/₹{goal.targetAmount.toLocaleString()}
+                      </option>
+                    ))}
+                  </select>
+                  {goals.length === 0 && (
+                    <p className="text-xs text-muted-foreground">No goals available. Create one in the Goals section.</p>
+                  )}
+                </div>
+              )}
 
                {/* Description - Common */}
               <div className="space-y-2">

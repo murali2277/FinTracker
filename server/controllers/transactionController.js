@@ -1,5 +1,6 @@
 import asyncHandler from 'express-async-handler';
 import Transaction from '../models/Transaction.js';
+import Goal from '../models/Goal.js';
 
 // @desc    Get user transactions
 // @route   GET /api/transactions
@@ -38,8 +39,24 @@ const setTransaction = asyncHandler(async (req, res) => {
     amount: req.body.amount,
     date: req.body.date,
     category: category,
-    paymentMode: req.body.paymentMode
+    paymentMode: req.body.paymentMode,
+    linkedGoalId: req.body.type === 'savings' && req.body.linkedGoalId ? req.body.linkedGoalId : null
   });
+
+  // If it's a savings transaction linked to a goal, update goal's currentAmount
+  if (req.body.type === 'savings' && req.body.linkedGoalId) {
+    const goal = await Goal.findById(req.body.linkedGoalId);
+    if (goal && goal.user.toString() === req.user.id.toString()) {
+      const newAmount = goal.currentAmount + Number(req.body.amount);
+      goal.currentAmount = newAmount;
+      goal.savingsHistory.push({
+        amount: Number(req.body.amount),
+        date: new Date(req.body.date),
+        source: 'dashboard'
+      });
+      await goal.save();
+    }
+  }
 
   // Check Overspending (Naive Limit: 5000 per category)
   // Ideally, this should come from a Budget model
@@ -124,6 +141,18 @@ const deleteTransaction = asyncHandler(async (req, res) => {
   if (transaction.user.toString() !== req.user.id) {
     res.status(401);
     throw new Error('User not authorized');
+  }
+
+  // If deleting a savings transaction linked to a goal, reverse the amount
+  if (transaction.type === 'savings' && transaction.linkedGoalId) {
+    const goal = await Goal.findById(transaction.linkedGoalId);
+    if (goal) {
+      goal.currentAmount = Math.max(0, goal.currentAmount - transaction.amount);
+      goal.savingsHistory = goal.savingsHistory.filter(
+        sh => sh.date.getTime() !== transaction.date.getTime()
+      );
+      await goal.save();
+    }
   }
 
   // Protected: Cannot delete Wallet Transactions manually
