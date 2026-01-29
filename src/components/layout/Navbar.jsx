@@ -176,10 +176,6 @@ const Navbar = ({ toggleSidebar }) => {
           </div>
 
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={toggleTheme} className="rounded-full">
-              {theme === 'dark' ? <FiSun className="h-5 w-5" /> : <FiMoon className="h-5 w-5" />}
-              <span className="sr-only">Toggle Theme</span>
-            </Button>
             
             {user ? (
               <div className="flex items-center gap-4">
@@ -191,9 +187,16 @@ const Navbar = ({ toggleSidebar }) => {
               </div>
             ) : (
               <div className="flex items-center gap-2">
+                <Link to="/about">
+                    <Button variant="ghost" size="sm">About</Button>
+                </Link>
                  <Link to="/login">
                     <Button variant="ghost" size="sm">Login</Button>
                  </Link>
+                 <Button variant="ghost" size="icon" onClick={toggleTheme} className="rounded-full">
+              {theme === 'dark' ? <FiSun className="h-5 w-5" /> : <FiMoon className="h-5 w-5" />}
+              <span className="sr-only">Toggle Theme</span>
+            </Button>
                  <Link to="/register">
                     <Button size="sm">Get Started</Button>
                  </Link>
