@@ -8,7 +8,7 @@ import {
   Tooltip, 
   ResponsiveContainer
 } from 'recharts';
-import { FiCornerUpLeft, FiCornerUpRight, FiArrowUp, FiArrowDown, FiDollarSign, FiActivity, FiCreditCard } from 'react-icons/fi';
+import { FiCornerUpLeft, FiCornerUpRight, FiArrowUp, FiArrowDown, FiDollarSign, FiActivity, FiCreditCard, FiCalendar } from 'react-icons/fi';
 
 
 import { cn } from '../utils/cn';
@@ -63,6 +63,7 @@ const Dashboard = () => {
     
     // Goals state for goal-based savings
     const [goals, setGoals] = useState([]);
+    const [recentTransactions, setRecentTransactions] = useState([]);
     
     // Add Transaction Form State
     const [formData, setFormData] = useState({
@@ -99,6 +100,10 @@ const Dashboard = () => {
             
             // Store goals for the form
             setGoals(goalsData);
+            
+            // Store recent transactions
+            const sortedTx = [...data].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+            setRecentTransactions(sortedTx);
             
             // Calculate Summary
             let income = 0;
@@ -268,8 +273,11 @@ const Dashboard = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-        <div className="flex items-center space-x-2">
-            {/* Date Range Picker or similar could go here */}
+        <div className="flex items-center space-x-2 text-muted-foreground">
+            <FiCalendar className="h-5 w-5" />
+            <h2 className="text-lg tracking-tight font-medium">
+                {new Date().toLocaleDateString('en-GB').replace(/\//g, '-')}
+            </h2>
         </div>
       </div>
 
@@ -317,7 +325,8 @@ const Dashboard = () => {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-4">
+        <div className="col-span-4">
+          <Card className="h-full">
           <CardHeader>
             <CardTitle>Overview</CardTitle>
           </CardHeader>
@@ -350,8 +359,10 @@ const Dashboard = () => {
             </div>
           </CardContent>
         </Card>
+        </div>
 
-        <Card className="col-span-3">
+        <div className="col-span-3 space-y-4">
+          <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
             <CardTitle>New Entry</CardTitle>
             <div className="flex items-center gap-1">
@@ -530,7 +541,39 @@ const Dashboard = () => {
               </Button>
             </form>
           </CardContent>
-        </Card>
+          </Card>
+
+          {/* Recent Transactions List */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg font-semibold">Recent History</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {recentTransactions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">No recent transactions</p>
+                ) : (
+                  recentTransactions.map((t) => (
+                    <div key={t._id} className="flex items-center justify-between border-b pb-2 last:border-0 last:pb-0">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium leading-none truncate max-w-[150px]">{t.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(t.date).toLocaleDateString()} • {t.category}
+                        </p>
+                      </div>
+                      <div className={cn("font-bold text-sm", 
+                        t.type === 'income' ? "text-emerald-500" : 
+                        t.type === 'expense' ? "text-rose-500" : "text-blue-500"
+                      )}>
+                        {t.type === 'income' ? '+' : '-'} ₹{Number(t.amount).toLocaleString()}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
