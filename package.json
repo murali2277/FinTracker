@@ -19,6 +19,8 @@
     "react-router-dom": "^7.10.1",
     "react-toastify": "^11.0.5",
     "recharts": "^3.5.1",
+    "swagger-jsdoc": "^6.3.0",
+    "swagger-ui-express": "^5.0.1",
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {

@@ -11,11 +11,19 @@ import notificationRoutes from './routes/notificationRoutes.js';
 import walletRoutes from './routes/walletRoutes.js';
 import friendRoutes from './routes/friendRoutes.js';
 import { notFound, errorHandler } from './middleware/errorMiddleware.js';
+import swaggerSpec from "./swagger.js";
+import swaggerUi from "swagger-ui-express";
 
-dotenv.config();
+dotenv.config()
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec)
+);
 
 // Middleware
 app.use(cors());
